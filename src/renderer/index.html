@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self' file:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: file: blob:;" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ContaFlex</title>
+  <link rel="stylesheet" href="css/main.css" />
+</head>
+<body>
+
+  <!-- Barra de título personalizada -->
+  <div class="titlebar" id="titlebar">
+    <div class="titlebar-drag">
+      <span class="app-logo">⬡</span>
+      <span class="app-name" id="appTitle">ContaFlex</span>
+    </div>
+    <div class="titlebar-controls">
+      <button onclick="api.window.minimize()" title="Minimizar">─</button>
+      <button onclick="api.window.maximize()" title="Maximizar">□</button>
+      <button onclick="api.window.close()" class="close-btn" title="Cerrar">✕</button>
+    </div>
+  </div>
+
+  <!-- Login Overlay (cubre el layout hasta autenticarse) -->
+  <div class="login-overlay" id="loginOverlay">
+    <div class="login-card" id="loginCard">
+
+      <!-- Logo + nombre -->
+      <div style="text-align:center">
+        <div class="login-logo">⬡</div>
+        <h1 class="login-title" id="loginAppName">ContaFlex</h1>
+        <p class="login-sub">Inicia sesión para continuar</p>
+      </div>
+
+      <!-- Campos -->
+      <div class="form-group" style="margin-bottom:0">
+        <label class="login-label">Usuario</label>
+        <input id="loginUser" type="text" placeholder="tu_usuario"
+          autocomplete="username" spellcheck="false"
+          style="background:var(--bg-elevated)"/>
+      </div>
+
+      <div class="form-group" style="margin-bottom:0">
+        <label class="login-label">Contraseña</label>
+        <div class="pass-field-wrap">
+          <input id="loginPass" type="password" placeholder="••••••••"
+            autocomplete="current-password"
+            style="background:var(--bg-elevated)"/>
+          <button type="button" class="pass-toggle" id="passToggle"
+            onclick="toggleVerClave()" title="Mostrar / ocultar contraseña">
+            👁️
+          </button>
+        </div>
+      </div>
+
+      <!-- Error -->
+      <div id="loginError" class="login-error hidden"></div>
+
+      <!-- Botón -->
+      <button class="btn btn-primary login-btn" id="loginBtn" onclick="hacerLogin()">
+        <span id="loginBtnText">Iniciar Sesión</span>
+      </button>
+
+      <!-- Roles info -->
+      <div class="login-roles">
+        <div class="login-role-item" onclick="seleccionarRol('admin','admin123')">
+          <span class="lr-icon">🔑</span>
+          <div><div class="lr-name">Admin</div><div class="lr-user">admin</div></div>
+        </div>
+        <div class="login-role-item" onclick="seleccionarRol('mesero','mesero123')">
+          <span class="lr-icon">🧧</span>
+          <div><div class="lr-name">Mesero</div><div class="lr-user">mesero</div></div>
+        </div>
+        <div class="login-role-item" onclick="seleccionarRol('cliente','cliente123')">
+          <span class="lr-icon">🛵</span>
+          <div><div class="lr-name">Cliente</div><div class="lr-user">cliente</div></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="layout">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <span class="brand-icon">⬡</span>
+        <span class="brand-text" id="sidebarNombre">ContaFlex</span>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a class="nav-item hidden" data-page="dashboard" onclick="navegarA('dashboard')">
+          <span class="nav-icon">◈</span><span class="nav-label">Dashboard</span>
+        </a>
+        <a class="nav-item hidden" data-page="ventas" onclick="navegarA('ventas')">
+          <span class="nav-icon">🧾</span><span class="nav-label">Ventas</span>
+        </a>
+        <a class="nav-item hidden" data-page="inventario" onclick="navegarA('inventario')">
+          <span class="nav-icon">📦</span><span class="nav-label">Inventario</span>
+        </a>
+        <a class="nav-item hidden" data-page="clientes" onclick="navegarA('clientes')">
+          <span class="nav-icon">👥</span><span class="nav-label">Clientes</span>
+        </a>
+        <a class="nav-item hidden" data-page="compras" onclick="navegarA('compras')">
+          <span class="nav-icon">🛒</span><span class="nav-label">Compras</span>
+        </a>
+        <a class="nav-item hidden" data-page="reportes" onclick="navegarA('reportes')">
+          <span class="nav-icon">📊</span><span class="nav-label">Reportes</span>
+        </a>
+        <a class="nav-item hidden" data-page="pedido" onclick="navegarA('pedido')">
+          <span class="nav-icon">🛵</span><span class="nav-label">Pedido Domicilio</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <a class="nav-item hidden" data-page="usuarios" onclick="navegarA('usuarios')">
+          <span class="nav-icon">👤</span><span class="nav-label">Usuarios</span>
+        </a>
+        <a class="nav-item hidden" data-page="configuracion" onclick="navegarA('configuracion')">
+          <span class="nav-icon">⚙</span><span class="nav-label">Configuración</span>
+        </a>
+        <!-- Info de sesión + logout -->
+        <div class="sidebar-user">
+          <div class="user-info">
+            <span class="user-nombre" id="sesionNombre">-</span>
+            <span class="user-rol" id="sesionRol">-</span>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="cerrarSesion()" title="Cerrar sesión"
+            style="-webkit-app-region:no-drag;padding:4px 8px;font-size:16px">⏻</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Contenido principal -->
+    <main class="main-content" id="mainContent">
+      <!-- Las páginas se cargarán aquí dinámicamente -->
+    </main>
+  </div>
+
+  <!-- Modal global -->
+  <div class="modal-overlay hidden" id="modalOverlay">
+    <div class="modal" id="modalBox">
+      <div class="modal-header">
+        <h3 id="modalTitle">Modal</h3>
+        <button class="modal-close" onclick="cerrarModal()">✕</button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+      <div class="modal-footer" id="modalFooter"></div>
+    </div>
+  </div>
+
+  <!-- Toast notifications -->
+  <div class="toasts-container" id="toastsContainer"></div>
+
+  <!-- ── Botón flotante Servidor ────────────────────────────────────────── -->
+  <button id="srvFab" onclick="abrirPanelServidor()"
+    title="Servidor Web — Conectar trabajadores"
+    style="
+      position:fixed;bottom:24px;right:24px;z-index:800;
+      width:52px;height:52px;border-radius:50%;border:none;cursor:pointer;
+      background:var(--color-primary,#6366f1);color:#fff;font-size:22px;
+      box-shadow:0 4px 20px rgba(99,102,241,.5);display:none;
+      align-items:center;justify-content:center;transition:transform .15s;
+    "
+    onmouseover="this.style.transform='scale(1.1)'"
+    onmouseout="this.style.transform='scale(1)'">
+    🌐
+    <span id="srvFabDot" style="
+      position:absolute;top:4px;right:4px;width:12px;height:12px;
+      border-radius:50%;background:#22c55e;border:2px solid var(--bg-base,#0f172a);
+      display:none;
+    "></span>
+  </button>
+
+  <!-- ── Modal Servidor / QR ────────────────────────────────────────────── -->
+  <div id="srvModal" style="
+    display:none;position:fixed;inset:0;z-index:900;
+    background:rgba(0,0,0,.7);align-items:flex-end;justify-content:center;
+  " onclick="if(event.target===this)cerrarPanelServidor()">
+    <div style="
+      background:var(--bg-card,#1e293b);border-radius:20px 20px 0 0;
+      padding:24px;width:100%;max-width:540px;
+      animation:slideUp .25s ease;
+    ">
+      <div style="width:36px;height:4px;background:#475569;border-radius:2px;margin:0 auto 20px"></div>
+      <h3 style="font-size:18px;font-weight:800;margin-bottom:4px">🌐 Servidor Web</h3>
+      <p style="font-size:13px;color:var(--text-muted,#94a3b8);margin-bottom:20px">
+        Los trabajadores escanean el QR desde su celular para conectarse y usar la caja.
+      </p>
+
+      <!-- Estado / toggle -->
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+        <div id="srvStatusDot" style="width:12px;height:12px;border-radius:50%;background:#475569;flex-shrink:0"></div>
+        <div>
+          <div id="srvStatusTxt" style="font-size:14px;font-weight:700">Iniciando...</div>
+          <div id="srvCliTxt" style="font-size:12px;color:var(--text-muted,#94a3b8)">0 clientes conectados</div>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:8px">
+          <button id="btnSrvStop" onclick="srvToggle()" class="btn btn-ghost btn-sm" style="font-size:13px">Detener</button>
+          <button onclick="srvRefresh()" class="btn btn-ghost btn-sm" style="font-size:13px">⟳</button>
+        </div>
+      </div>
+
+      <!-- URL + QR -->
+      <div id="srvQrSection" style="display:none">
+        <!-- QR -->
+        <div style="text-align:center;margin-bottom:20px">
+          <img id="srvQrImg" src="" alt="QR" style="
+            width:200px;height:200px;border-radius:12px;
+            background:var(--bg-elevated,#334155);margin:0 auto;display:block;
+          "/>
+          <p style="font-size:12px;color:var(--text-muted,#94a3b8);margin-top:8px">
+            Escanear con el celular
+          </p>
+        </div>
+
+        <!-- URLs -->
+        <div id="srvUrls" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px"></div>
+
+        <!-- Abrir en navegador -->
+        <button id="btnSrvOpen" onclick="srvAbrirNavegador()" class="btn btn-primary" style="width:100%;justify-content:center;margin-bottom:10px">
+          🔗 Abrir en navegador
+        </button>
+      </div>
+
+      <div id="srvOffSection" style="display:none;text-align:center;padding:20px 0">
+        <div style="font-size:48px;margin-bottom:8px">📴</div>
+        <p style="color:var(--text-muted,#94a3b8);font-size:14px;margin-bottom:16px">Servidor detenido</p>
+        <button onclick="srvToggle()" class="btn btn-primary btn-lg" style="width:100%;justify-content:center">
+          ▶ Iniciar Servidor
+        </button>
+      </div>
+
+      <button onclick="cerrarPanelServidor()" class="btn btn-ghost" style="width:100%;justify-content:center;margin-top:8px">Cerrar</button>
+    </div>
+  </div>
+
+  <style>
+    @keyframes slideUp{ from{transform:translateY(60px);opacity:0} to{transform:translateY(0);opacity:1} }
+  </style>
+
+  <script>
+  // ══════════════════════════════════════════════════════════════════
+  //  Panel Servidor ContaFlex
+  // ══════════════════════════════════════════════════════════════════
+
+  let _srvState    = null;
+  let _srvInterval = null;
+
+  /** Llamado desde app.js tras login exitoso (o al montar el sidebar) */
+  window._initServidorFAB = function() {
+    const fab = document.getElementById('srvFab');
+    if (fab) fab.style.display = 'flex';
+    _srvPoll();
+    clearInterval(_srvInterval);
+    _srvInterval = setInterval(_srvPoll, 6000);
+  };
+
+  async function _srvPoll() {
+    if (!window.api?.servidor) return;
+    try {
+      const st = await api.servidor.status();
+      _srvState = st;
+      _actualizarFAB(st);
+    } catch {}
+  }
+
+  function _actualizarFAB(st) {
+    const dot = document.getElementById('srvFabDot');
+    if (dot) dot.style.display = st?.running ? 'block' : 'none';
+  }
+
+  function abrirPanelServidor() {
+    const modal = document.getElementById('srvModal');
+    modal.style.display = 'flex';
+    renderSrvPanel(_srvState);
+    _srvPoll().then(() => renderSrvPanel(_srvState));
+  }
+
+  function cerrarPanelServidor() {
+    document.getElementById('srvModal').style.display = 'none';
+  }
+
+  async function renderSrvPanel(st) {
+    if (!st) {
+      try { st = await api.servidor.status(); _srvState = st; } catch { return; }
+    }
+
+    const dot    = document.getElementById('srvStatusDot');
+    const txt    = document.getElementById('srvStatusTxt');
+    const cliTxt = document.getElementById('srvCliTxt');
+    const qrSec  = document.getElementById('srvQrSection');
+    const offSec = document.getElementById('srvOffSection');
+    const stopBtn = document.getElementById('btnSrvStop');
+
+    if (st.running) {
+      dot.style.background    = '#22c55e';
+      txt.textContent         = `✅ Activo — puerto ${st.port}`;
+      cliTxt.textContent      = `${st.clients} cliente${st.clients !== 1 ? 's' : ''} conectado${st.clients !== 1 ? 's' : ''}`;
+      stopBtn.textContent     = '⏹ Detener';
+      qrSec.style.display     = 'block';
+      offSec.style.display    = 'none';
+
+      // Mostrar URLs
+      const urlsEl = document.getElementById('srvUrls');
+      urlsEl.innerHTML = (st.urls || []).map(u => `
+        <div style="display:flex;align-items:center;gap:8px;background:var(--bg-elevated,#334155);border-radius:8px;padding:10px 14px">
+          <span style="font-size:11px;font-family:monospace;flex:1;word-break:break-all;color:var(--text-primary,#f1f5f9)">${u}</span>
+          <button onclick="navigator.clipboard?.writeText('${u}').then(()=>window._toast&&window._toast('¡Copiado!','success'))" 
+            class="btn btn-ghost btn-sm" style="font-size:11px;flex-shrink:0">Copiar</button>
+        </div>`).join('');
+
+      // Generar QR con la URL principal
+      if (st.primaryUrl) {
+        try {
+          const qrData = await api.servidor.generarQR(st.primaryUrl);
+          if (qrData) document.getElementById('srvQrImg').src = qrData;
+        } catch {}
+      }
+
+    } else {
+      dot.style.background    = '#ef4444';
+      txt.textContent         = '📴 Detenido';
+      cliTxt.textContent      = '';
+      stopBtn.textContent     = '▶ Iniciar';
+      qrSec.style.display     = 'none';
+      offSec.style.display    = 'block';
+    }
+  }
+
+  async function srvToggle() {
+    if (!window.api?.servidor) return;
+    try {
+      if (_srvState?.running) {
+        _srvState = await api.servidor.stop();
+      } else {
+        _srvState = await api.servidor.start();
+      }
+      renderSrvPanel(_srvState);
+      _actualizarFAB(_srvState);
+    } catch (e) {
+      console.error('srvToggle:', e);
+    }
+  }
+
+  async function srvRefresh() {
+    await _srvPoll();
+    renderSrvPanel(_srvState);
+  }
+
+  function srvAbrirNavegador() {
+    const url = _srvState?.primaryUrl;
+    if (url && window.api?.servidor) api.servidor.abrirNavegador(url);
+  }
+
+  // Inicializar FAB cuando el usuario hace login (hook en app.js)
+  // Si sesion ya existe, iniciar ahora mismo
+  document.addEventListener('DOMContentLoaded', () => {
+    // Lo activa app.js al hacer login exitoso
+  });
+  </script>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

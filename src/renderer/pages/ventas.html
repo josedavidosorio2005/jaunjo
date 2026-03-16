@@ -1,0 +1,438 @@
+<!-- VENTAS POS -->
+<div class="page-header">
+  <div>
+    <h1>Ventas</h1>
+    <p>Punto de venta y registro de facturas</p>
+  </div>
+  <div class="flex gap-2">
+    <button class="btn btn-ghost" onclick="mostrarHistorialVentas()">📋 Historial</button>
+    <button class="btn btn-primary" id="btnNuevaVenta" onclick="iniciarPOS()">+ Nueva Venta</button>
+  </div>
+</div>
+
+<!-- Vista por defecto: Historial -->
+<div id="vistaHistorial">
+  <div class="toolbar">
+    <div class="search-bar"><input type="text" id="buscarVenta" placeholder="Buscar por número, cliente..." /></div>
+    <input type="date" id="filtroDesde" style="width:150px" />
+    <input type="date" id="filtroHasta" style="width:150px" />
+    <button class="btn btn-ghost" onclick="cargarVentas()">Filtrar</button>
+  </div>
+  <div class="table-wrap" id="tablaVentas"><div class="spinner"></div></div>
+</div>
+
+<!-- Vista POS -->
+<div id="vistaPos" class="hidden">
+  <div class="pos-layout">
+    <!-- Columna izquierda: catálogo -->
+    <div class="pos-productos">
+      <div class="toolbar mb-4">
+        <div class="search-bar flex-1">
+          <input type="text" id="posBuscar" placeholder="Buscar producto o escanear código..." />
+        </div>
+        <select id="posCat" style="width:160px">
+          <option value="">Todas las categorías</option>
+        </select>
+      </div>
+      <div class="productos-grid" id="posGrid"><div class="spinner"></div></div>
+    </div>
+
+    <!-- Carrito -->
+    <div class="pos-carrito">
+      <div class="carrito-header flex justify-between items-center">
+        <span>Carrito</span>
+        <button class="btn btn-ghost btn-sm" onclick="limpiarCarrito()">Limpiar</button>
+      </div>
+
+      <div class="carrito-items" id="carritoItems">
+        <div class="empty-state" style="padding:30px 0">
+          <div class="es-icon" style="font-size:30px">🛒</div>
+          <p>Agrega productos</p>
+        </div>
+      </div>
+
+      <div class="carrito-footer">
+        <!-- Cliente rápido -->
+        <div class="form-group">
+          <label>Cliente</label>
+          <select id="carritoCliente"></select>
+        </div>
+
+        <div class="carrito-totales" id="carritoTotales">
+          <div class="total-row"><span>Subtotal</span><span id="ctSubtotal">$0.00</span></div>
+          <div class="total-row"><span>Impuesto</span><span id="ctImpuesto">$0.00</span></div>
+          <div class="total-row"><span>Descuento</span>
+            <input type="number" id="ctDescuento" value="0" min="0" step="0.01"
+              style="width:80px;padding:2px 6px;text-align:right"
+              oninput="recalcularCarrito()" />
+          </div>
+          <div class="total-row grand-total"><span>TOTAL</span><span id="ctTotal">$0.00</span></div>
+        </div>
+
+        <!-- Pago -->
+        <div class="form-row form-row-2 mb-4">
+          <div class="form-group" style="margin:0">
+            <label>Método de pago</label>
+            <select id="carritoMetodo">
+              <option value="efectivo">Efectivo</option>
+              <option value="tarjeta">Tarjeta</option>
+              <option value="transferencia">Transferencia</option>
+              <option value="credito">A crédito</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin:0">
+            <label>Monto recibido</label>
+            <input type="number" id="carritoRecibido" placeholder="0.00" step="0.01" min="0" oninput="calcularCambio()" />
+          </div>
+        </div>
+        <div class="flex justify-between text-sm mb-4" id="filaCambio" style="display:none!important">
+          <span class="text-muted">Cambio:</span>
+          <span class="font-bold text-success" id="ctCambio">$0.00</span>
+        </div>
+
+        <button class="btn btn-success w-full" style="font-size:16px;padding:13px"
+          onclick="procesarVenta()">✓ Cobrar</button>
+        <button class="btn btn-ghost w-full mt-4" onclick="mostrarHistorialVentas()">← Volver</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script data-page-init>
+// Estado del carrito
+let carrito = [];
+let productosCache = [];
+let clientesCache = [];
+let impuestoPct = 0;
+let aplicaImp = true;
+
+(async function init() {
+  // Configurar fechas por defecto
+  const hoy = new Date().toISOString().split('T')[0];
+  const hace30 = new Date(Date.now()-30*86400000).toISOString().split('T')[0];
+  document.getElementById('filtroDesde').value = hace30;
+  document.getElementById('filtroHasta').value = hoy;
+
+  // Cargar datos
+  await Promise.all([cargarVentas(), cargarDatosPOS()]);
+})();
+
+async function cargarVentas() {
+  const busqueda = document.getElementById('buscarVenta')?.value || '';
+  const desde = document.getElementById('filtroDesde')?.value;
+  const hasta = document.getElementById('filtroHasta')?.value;
+  const ventas = await api.ventas.obtenerTodas({ desde, hasta });
+
+  const filtradas = busqueda
+    ? ventas.filter(v => (v.numero+v.cliente_nombre).toLowerCase().includes(busqueda.toLowerCase()))
+    : ventas;
+
+  if (filtradas.length === 0) {
+    document.getElementById('tablaVentas').innerHTML = `<div class="empty-state"><div class="es-icon">🧾</div><h3>Sin ventas en este período</h3></div>`;
+    return;
+  }
+
+  document.getElementById('tablaVentas').innerHTML = `
+    <table>
+      <thead><tr><th>Número</th><th>Fecha</th><th>Cliente</th><th>Total</th><th>Pagado</th><th>Estado</th><th></th></tr></thead>
+      <tbody>
+        ${filtradas.map(v => `<tr>
+          <td class="font-semibold">${v.numero}</td>
+          <td class="text-muted text-sm">${formatDateTime(v.fecha)}</td>
+          <td>${v.cliente_nombre || 'Público general'}</td>
+          <td class="font-bold">${formatMoney(v.total)}</td>
+          <td>${formatMoney(v.pagado)}</td>
+          <td>${badgeEstV(v.estado)}</td>
+          <td><div class="flex gap-2">
+            <button class="btn btn-ghost btn-sm" onclick="verVenta(${v.id})">Ver</button>
+            ${v.estado!=='anulada'?`<button class="btn btn-ghost btn-sm text-danger" onclick="anularVenta(${v.id})">Anular</button>`:''}
+          </div></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+// Búsqueda con debounce
+document.getElementById('buscarVenta')?.addEventListener('input', debounce(cargarVentas, 300));
+
+async function cargarDatosPOS() {
+  const [prods, cats, clts, cfg] = await Promise.all([
+    api.inventario.obtenerProductos({}),
+    api.inventario.obtenerCategorias(),
+    api.clientes.obtenerTodos({}),
+    api.config.obtener()
+  ]);
+  productosCache = prods;
+  clientesCache = clts;
+  impuestoPct = parseFloat(cfg.impuesto_porcentaje || 0);
+  aplicaImp = cfg.aplicar_impuesto == '1' || cfg.aplicar_impuesto === true;
+
+  // Categorías
+  const sel = document.getElementById('posCat');
+  if (sel) cats.forEach(c => sel.innerHTML += `<option value="${c.id}">${c.nombre}</option>`);
+
+  // Clientes
+  const selCli = document.getElementById('carritoCliente');
+  if (selCli) {
+    selCli.innerHTML = '<option value="">Público general</option>';
+    clts.forEach(c => selCli.innerHTML += `<option value="${c.id}">${c.nombre}</option>`);
+  }
+
+  renderProductos(productosCache);
+
+  // Eventos busqueda
+  document.getElementById('posBuscar')?.addEventListener('input', debounce(() => {
+    const q = document.getElementById('posBuscar').value.toLowerCase();
+    const catId = document.getElementById('posCat').value;
+    let lista = productosCache.filter(p =>
+      (p.nombre.toLowerCase().includes(q) || (p.codigo||'').toLowerCase().includes(q)) &&
+      (!catId || String(p.categoria_id) === catId)
+    );
+    renderProductos(lista);
+  }, 200));
+
+  document.getElementById('posCat')?.addEventListener('change', () => {
+    const q = document.getElementById('posBuscar').value.toLowerCase();
+    const catId = document.getElementById('posCat').value;
+    let lista = productosCache.filter(p =>
+      (p.nombre.toLowerCase().includes(q) || (p.codigo||'').toLowerCase().includes(q)) &&
+      (!catId || String(p.categoria_id) === catId)
+    );
+    renderProductos(lista);
+  });
+}
+
+function renderProductos(lista) {
+  const grid = document.getElementById('posGrid');
+  if (!grid) return;
+  if (lista.length === 0) {
+    grid.innerHTML = `<div class="empty-state"><div class="es-icon">📦</div><h3>Sin productos</h3></div>`;
+    return;
+  }
+  grid.innerHTML = lista.map(p => `
+    <div class="producto-card ${p.stock<=0?'sin-stock':''}" onclick="agregarAlCarrito(${p.id})">
+      <div class="prod-nombre">${p.nombre}</div>
+      <div class="prod-precio">${formatMoney(p.precio_venta)}</div>
+      <div class="prod-stock">Stock: ${p.stock} ${p.unidad}</div>
+    </div>`).join('');
+}
+
+function agregarAlCarrito(productoId) {
+  const prod = productosCache.find(p => p.id === productoId);
+  if (!prod) return;
+  const existente = carrito.find(i => i.producto_id === productoId);
+  if (existente) {
+    if (existente.cantidad >= prod.stock) { toast('Stock insuficiente', 'error'); return; }
+    existente.cantidad++;
+    existente.total = +(existente.cantidad * existente.precio).toFixed(2);
+  } else {
+    carrito.push({
+      producto_id: prod.id,
+      nombre: prod.nombre,
+      precio: prod.precio_venta,
+      cantidad: 1,
+      descuento: 0,
+      total: prod.precio_venta
+    });
+  }
+  renderCarrito();
+}
+
+function cambiarCantidad(idx, delta) {
+  const item = carrito[idx];
+  if (!item) return;
+  item.cantidad = Math.max(1, item.cantidad + delta);
+  item.total = +(item.cantidad * item.precio).toFixed(2);
+  renderCarrito();
+}
+
+function eliminarDelCarrito(idx) {
+  carrito.splice(idx, 1);
+  renderCarrito();
+}
+
+function limpiarCarrito() {
+  carrito = [];
+  renderCarrito();
+}
+
+function renderCarrito() {
+  const contenedor = document.getElementById('carritoItems');
+  if (!contenedor) return;
+  if (carrito.length === 0) {
+    contenedor.innerHTML = `<div class="empty-state" style="padding:30px 0"><div class="es-icon" style="font-size:30px">🛒</div><p>Agrega productos</p></div>`;
+    recalcularCarrito();
+    return;
+  }
+  contenedor.innerHTML = carrito.map((i, idx) => `
+    <div class="carrito-item">
+      <div class="carrito-item-info">
+        <div class="ci-nombre">${i.nombre}</div>
+        <div class="ci-precio">${formatMoney(i.precio)} c/u</div>
+      </div>
+      <div class="qty-control">
+        <button onclick="cambiarCantidad(${idx},-1)">−</button>
+        <span>${i.cantidad}</span>
+        <button onclick="cambiarCantidad(${idx},1)">+</button>
+      </div>
+      <div class="ci-total">${formatMoney(i.total)}</div>
+      <button class="ci-remove" onclick="eliminarDelCarrito(${idx})">✕</button>
+    </div>`).join('');
+  recalcularCarrito();
+}
+
+function recalcularCarrito() {
+  const subtotal = carrito.reduce((s, i) => s + i.total, 0);
+  const descuento = parseFloat(document.getElementById('ctDescuento')?.value || 0);
+  const impuesto = aplicaImp ? +((subtotal - descuento) * impuestoPct / 100).toFixed(2) : 0;
+  const total = Math.max(0, +(subtotal + impuesto - descuento).toFixed(2));
+
+  document.getElementById('ctSubtotal').textContent = formatMoney(subtotal);
+  document.getElementById('ctImpuesto').textContent = formatMoney(impuesto);
+  document.getElementById('ctTotal').textContent = formatMoney(total);
+  calcularCambio();
+}
+
+function calcularCambio() {
+  const total = parseFloat(document.getElementById('ctTotal')?.textContent?.replace(/[^0-9.]/g,'') || 0);
+  const recibido = parseFloat(document.getElementById('carritoRecibido')?.value || 0);
+  const cambio = Math.max(0, recibido - total);
+  const filaCambio = document.getElementById('filaCambio');
+  if (recibido > 0) {
+    filaCambio.style.removeProperty('display');
+    document.getElementById('ctCambio').textContent = formatMoney(cambio);
+  } else {
+    filaCambio.style.setProperty('display','none','important');
+  }
+}
+
+async function procesarVenta() {
+  if (carrito.length === 0) { toast('El carrito está vacío', 'error'); return; }
+
+  const subtotal = carrito.reduce((s, i) => s + i.total, 0);
+  const descuento = parseFloat(document.getElementById('ctDescuento').value || 0);
+  const metodo = document.getElementById('carritoMetodo').value;
+  const clienteId = document.getElementById('carritoCliente').value || null;
+  const recibido = parseFloat(document.getElementById('carritoRecibido').value || 0);
+
+  const impuesto = aplicaImp ? +((subtotal - descuento) * impuestoPct / 100).toFixed(2) : 0;
+  const total = Math.max(0, +(subtotal + impuesto - descuento).toFixed(2));
+  const pagado = metodo === 'credito' ? 0 : (recibido >= total ? total : recibido || total);
+
+  try {
+    const btnCobrar = document.querySelector('.pos-carrito .btn-success');
+    btnCobrar.disabled = true;
+    const res = await api.ventas.crear({
+      cliente_id: clienteId ? parseInt(clienteId) : null,
+      descuento, metodo_pago: metodo, pagado, detalle: [...carrito]
+    });
+    toast(`Venta ${res.numero} registrada correctamente`, 'success');
+    limpiarCarrito();
+    document.getElementById('carritoRecibido').value = '';
+    document.getElementById('ctDescuento').value = '0';
+    btnCobrar.disabled = false;
+  } catch (e) {
+    toast('Error al procesar venta: ' + e.message, 'error');
+    document.querySelector('.pos-carrito .btn-success').disabled = false;
+  }
+}
+
+async function verVenta(id) {
+  const venta = await api.ventas.obtenerPorId(id);
+  const negocio = appState.config.nombre_negocio || 'Mi Negocio';
+  abrirModal(`Venta ${venta.numero}`, `
+    <div class="flex justify-between mb-4">
+      <div><p class="text-muted text-sm">Fecha</p><p class="font-semibold">${formatDateTime(venta.fecha)}</p></div>
+      <div><p class="text-muted text-sm">Cliente</p><p class="font-semibold">${venta.cliente_nombre||'Público'}</p></div>
+      <div><p class="text-muted text-sm">Estado</p>${badgeEstV(venta.estado)}</div>
+    </div>
+    <table>
+      <thead><tr><th>Producto</th><th>Cant.</th><th>Precio</th><th>Total</th></tr></thead>
+      <tbody>${venta.detalle.map(d=>`<tr>
+        <td>${d.nombre}</td><td>${d.cantidad}</td><td>${formatMoney(d.precio)}</td><td>${formatMoney(d.total)}</td>
+      </tr>`).join('')}</tbody>
+    </table>
+    <hr class="divider"/>
+    <div class="flex justify-between"><span>Subtotal</span><span>${formatMoney(venta.subtotal)}</span></div>
+    <div class="flex justify-between"><span>Impuesto</span><span>${formatMoney(venta.impuesto)}</span></div>
+    <div class="flex justify-between"><span>Descuento</span><span>-${formatMoney(venta.descuento)}</span></div>
+    <div class="flex justify-between text-xl font-bold mt-4"><span>TOTAL</span><span class="text-primary-color">${formatMoney(venta.total)}</span></div>
+  `, {
+    footer: `
+      <button class="btn btn-ghost" onclick="imprimirRecibo(${id})">🖨 Imprimir</button>
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cerrar</button>
+    `
+  });
+}
+
+async function imprimirRecibo(id) {
+  const venta   = await api.ventas.obtenerPorId(id);
+  const negocio = appState.config.nombre_negocio || 'Mi Negocio';
+  const sym     = appState.config.simbolo_moneda  || '$';
+  const fmt     = v => `${sym}${Number(v||0).toFixed(2)}`;
+  const win = window.open('', '_blank', 'width=420,height=700');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>Recibo ${venta.numero}</title>
+  <style>
+    body{font-family:monospace;font-size:13px;padding:20px 30px;color:#000;background:#fff}
+    .center{text-align:center} .bold{font-weight:bold} .sep{border-top:1px dashed #000;margin:8px 0}
+    table{width:100%;border-collapse:collapse} td{padding:2px 4px} .r{text-align:right}
+    .total{font-size:16px;font-weight:bold}
+  </style></head><body>
+  <div class="center bold" style="font-size:16px">${negocio}</div>
+  <div class="center">Comprobante de Venta</div>
+  <div class="sep"></div>
+  <div>N°: <b>${venta.numero}</b></div>
+  <div>Fecha: ${venta.fecha}</div>
+  <div>Cliente: ${venta.cliente_nombre||'Público general'}</div>
+  <div>Método: ${venta.metodo_pago}</div>
+  <div class="sep"></div>
+  <table>
+    <thead><tr><td><b>Producto</b></td><td class="r"><b>Cant</b></td><td class="r"><b>P.Unit</b></td><td class="r"><b>Total</b></td></tr></thead>
+    <tbody>${venta.detalle.map(d=>`<tr>
+      <td>${d.nombre}</td><td class="r">${d.cantidad}</td>
+      <td class="r">${fmt(d.precio)}</td><td class="r">${fmt(d.total)}</td>
+    </tr>`).join('')}</tbody>
+  </table>
+  <div class="sep"></div>
+  <div style="display:flex;justify-content:space-between"><span>Subtotal:</span><span>${fmt(venta.subtotal)}</span></div>
+  ${venta.impuesto>0?`<div style="display:flex;justify-content:space-between"><span>Impuesto:</span><span>${fmt(venta.impuesto)}</span></div>`:''}
+  ${venta.descuento>0?`<div style="display:flex;justify-content:space-between"><span>Descuento:</span><span>-${fmt(venta.descuento)}</span></div>`:''}
+  <div class="sep"></div>
+  <div class="total" style="display:flex;justify-content:space-between"><span>TOTAL</span><span>${fmt(venta.total)}</span></div>
+  <div style="display:flex;justify-content:space-between"><span>Pagado:</span><span>${fmt(venta.pagado)}</span></div>
+  ${venta.pagado<venta.total?`<div style="display:flex;justify-content:space-between;color:#cc0000"><span>Pendiente:</span><span>${fmt(venta.total-venta.pagado)}</span></div>`:''}
+  <div class="sep"></div>
+  <div class="center" style="margin-top:16px;font-size:12px">¡Gracias por su compra!</div>
+  <script>window.onload=()=>{window.print();}<\/script>
+  </body></html>`);
+  win.document.close();
+}
+
+async function anularVenta(id) {
+  const ok = await confirm('¿Anular esta venta? Se revertirá el stock.');
+  if (!ok) return;
+  try {
+    await api.ventas.anular(id);
+    toast('Venta anulada', 'success');
+    cargarVentas();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function iniciarPOS() {
+  document.getElementById('vistaHistorial').classList.add('hidden');
+  document.getElementById('vistaPos').classList.remove('hidden');
+  cargarDatosPOS();
+}
+
+function mostrarHistorialVentas() {
+  document.getElementById('vistaPos').classList.add('hidden');
+  document.getElementById('vistaHistorial').classList.remove('hidden');
+  cargarVentas();
+}
+
+function badgeEstV(e) {
+  const m = { completada:'badge-green', credito:'badge-yellow', anulada:'badge-red' };
+  return `<span class="badge ${m[e]||'badge-gray'}">${e}</span>`;
+}
+</script>

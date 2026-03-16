@@ -1,0 +1,47 @@
+{
+  "name": "contaflex",
+  "version": "1.0.0",
+  "description": "Software de contabilidad multiplataforma para pequeños negocios",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --inspect",
+    "build": "electron-builder",
+    "launch": "node -e \"const {execFile}=require('child_process'); const p=require('path'); execFile(p.join(__dirname,'node_modules/electron/dist/electron.exe'),['.']);\""
+  },
+  "keywords": [
+    "contabilidad",
+    "small-business",
+    "electron",
+    "sqlite"
+  ],
+  "author": "ContaFlex",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.3.3",
+    "electron-builder": "^24.0.0"
+  },
+  "dependencies": {
+    "dayjs": "^1.11.10",
+    "express": "^5.2.1",
+    "qrcode": "^1.5.4",
+    "sql.js": "^1.12.0",
+    "uuid": "^9.0.0",
+    "ws": "^8.19.0"
+  },
+  "build": {
+    "appId": "com.contaflex.app",
+    "productName": "ContaFlex",
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icons/icon.ico"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icons/icon.icns"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}

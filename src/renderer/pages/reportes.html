@@ -1,0 +1,618 @@
+<!-- REPORTES Y CONTABILIDAD -->
+<div class="page-header" style="flex-wrap:wrap;gap:10px">
+  <div>
+    <h1>📊 Reportes y Contabilidad</h1>
+    <p>Estadísticas de ganancias y libros para tu contadora</p>
+  </div>
+  <div class="flex gap-2 flex-wrap" style="align-items:center">
+    <input type="date" id="repDesde" style="width:148px"/>
+    <span style="color:var(--text-muted)">→</span>
+    <input type="date" id="repHasta" style="width:148px"/>
+    <button class="btn btn-primary" onclick="cargarReportes()">🔄 Actualizar</button>
+    <button class="btn btn-ghost no-print" style="border:1px solid var(--border)" onclick="window.print()">🖨️ Imprimir</button>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="rep-tabs mb-5">
+  <button class="rep-tab active" data-tab="resumen"      onclick="cambiarTab(this)">📊 Resumen</button>
+  <button class="rep-tab"        data-tab="resultados"   onclick="cambiarTab(this)">📈 Estado de Resultados</button>
+  <button class="rep-tab"        data-tab="ganancias"    onclick="cambiarTab(this)">💰 Ganancias</button>
+  <button class="rep-tab"        data-tab="contabilidad" onclick="cambiarTab(this)">📋 Libros Contables</button>
+</div>
+
+<!-- ═══ TAB: RESUMEN ═══ -->
+<div id="tab-resumen" class="rep-tab-panel">
+  <div class="grid grid-3 mb-6" id="repBalance"><div class="spinner"></div></div>
+  <div class="grid grid-2 mb-6">
+    <div class="card"><h3 class="font-bold mb-4">Ventas por día</h3>
+      <div id="repVentasDia"><div class="spinner"></div></div></div>
+    <div class="card"><h3 class="font-bold mb-4">Productos más vendidos</h3>
+      <div id="repTopProductos"><div class="spinner"></div></div></div>
+  </div>
+  <div class="grid grid-2 mb-6">
+    <div class="card"><h3 class="font-bold mb-4">Clientes top</h3>
+      <div id="repTopClientes"><div class="spinner"></div></div></div>
+    <div class="card"><h3 class="font-bold mb-4">Flujo de Efectivo</h3>
+      <div id="repFlujo"><div class="spinner"></div></div></div>
+  </div>
+</div>
+
+<!-- ═══ TAB: ESTADO DE RESULTADOS ═══ -->
+<div id="tab-resultados" class="rep-tab-panel" style="display:none">
+  <div id="repEstadoResultados"><div class="spinner"></div></div>
+</div>
+
+<!-- ═══ TAB: GANANCIAS ═══ -->
+<div id="tab-ganancias" class="rep-tab-panel" style="display:none">
+  <div id="repGanancias"><div class="spinner"></div></div>
+</div>
+
+<!-- ═══ TAB: LIBROS CONTABLES ═══ -->
+<div id="tab-contabilidad" class="rep-tab-panel" style="display:none">
+  <div id="repContabilidad"><div class="spinner"></div></div>
+</div>
+
+<script data-page-init>
+let _repData = {};
+let _cfg     = {};
+
+(function() {
+  const hoy    = new Date();
+  const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().split('T')[0];
+  document.getElementById('repDesde').value = inicio;
+  document.getElementById('repHasta').value = hoy.toISOString().split('T')[0];
+  api.config.obtener().then(c => { _cfg = c; });
+  cargarReportes();
+})();
+
+function cambiarTab(btn) {
+  document.querySelectorAll('.rep-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.rep-tab-panel').forEach(p => p.style.display = 'none');
+  btn.classList.add('active');
+  document.getElementById('tab-' + btn.dataset.tab).style.display = '';
+}
+
+async function cargarReportes() {
+  const desde   = document.getElementById('repDesde').value;
+  const hasta   = document.getElementById('repHasta').value;
+  const filtros = { desde, hasta };
+
+  ['repBalance','repEstadoResultados','repGanancias','repContabilidad',
+   'repVentasDia','repTopProductos','repTopClientes','repFlujo']
+    .forEach(id => { const el=document.getElementById(id); if(el) el.innerHTML='<div class="spinner"></div>'; });
+
+  const [balance, vendasPer, topProd, topCli, flujo, estadoRes, ganancias, libros] =
+    await Promise.all([
+      api.reportes.balanceGeneral(filtros),
+      api.reportes.ventasPorPeriodo(filtros),
+      api.reportes.productosMasVendidos(filtros),
+      api.reportes.clientesTop(),
+      api.reportes.flujoEfectivo(filtros),
+      api.reportes.estadoResultados(filtros),
+      api.reportes.gananciasPorProducto(filtros),
+      api.reportes.libroContable(filtros),
+    ]);
+
+  _repData = { balance, vendasPer, topProd, topCli, flujo, estadoRes, ganancias, libros };
+
+  renderResumen(balance, vendasPer, topProd, topCli, flujo);
+  renderEstadoResultados(estadoRes);
+  renderGanancias(ganancias);
+  renderContabilidad(libros);
+}
+
+// ── TAB 1: RESUMEN ────────────────────────────────────────────────────────────
+function renderResumen(balance, vendasPer, topProd, topCli, flujo) {
+  document.getElementById('repBalance').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-icon green">↑</div>
+      <div class="stat-info"><h3>${formatMoney(balance.ingresos)}</h3><p>Ingresos por ventas</p></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon red">↓</div>
+      <div class="stat-info"><h3>${formatMoney(balance.egresos)}</h3><p>Egresos (compras + gastos)</p></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon ${balance.utilidad>=0?'purple':'red'}">◈</div>
+      <div class="stat-info">
+        <h3 class="${balance.utilidad>=0?'text-success':'text-danger'}">${formatMoney(balance.utilidad)}</h3>
+        <p>Utilidad neta</p>
+      </div>
+    </div>`;
+
+  const maxV = Math.max(...vendasPer.porDia.map(d=>d.total), 1);
+  document.getElementById('repVentasDia').innerHTML = vendasPer.porDia.length === 0
+    ? `<div class="empty-state" style="padding:20px"><p>Sin ventas en este período</p></div>`
+    : `<div class="chart-bar-wrap">
+        ${vendasPer.porDia.map(d=>{
+          const pct   = Math.round((d.total/maxV)*100);
+          const fecha = new Date(d.dia+'T12:00:00').toLocaleDateString('es',{day:'2-digit',month:'short'});
+          return `<div class="chart-bar-item">
+            <div class="chart-bar-label">${fecha}</div>
+            <div class="chart-bar-bg"><div class="chart-bar-fill" style="width:${pct}%"></div></div>
+            <div class="chart-bar-value">${formatMoney(d.total)}</div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div class="mt-4 flex gap-4 text-sm text-muted">
+        <span>Total: <strong class="text-primary-color">${formatMoney(vendasPer.resumen.total)}</strong></span>
+        <span>Ventas: <strong>${vendasPer.resumen.cantidad}</strong></span>
+        <span>Efectivo: <strong>${formatMoney(vendasPer.resumen.efectivo)}</strong></span>
+        <span>Tarjeta: <strong>${formatMoney(vendasPer.resumen.tarjeta)}</strong></span>
+      </div>`;
+
+  const maxP = Math.max(...topProd.map(p=>p.cantidad_total), 1);
+  document.getElementById('repTopProductos').innerHTML = topProd.length === 0
+    ? `<div class="empty-state" style="padding:20px"><p>Sin datos</p></div>`
+    : `<div class="chart-bar-wrap">
+        ${topProd.map(p=>{
+          const pct = Math.round((p.cantidad_total/maxP)*100);
+          return `<div class="chart-bar-item">
+            <div class="chart-bar-label">${p.nombre}</div>
+            <div class="chart-bar-bg"><div class="chart-bar-fill" style="width:${pct}%;background:var(--success)"></div></div>
+            <div class="chart-bar-value">${p.cantidad_total} u.</div>
+          </div>`;
+        }).join('')}
+      </div>`;
+
+  const maxC = Math.max(...topCli.map(c=>c.total_comprado), 1);
+  document.getElementById('repTopClientes').innerHTML = topCli.length === 0
+    ? `<div class="empty-state" style="padding:20px"><p>Sin clientes</p></div>`
+    : `<div class="chart-bar-wrap">
+        ${topCli.filter(c=>c.total_comprado>0).map(c=>{
+          const pct = Math.round((c.total_comprado/maxC)*100);
+          return `<div class="chart-bar-item">
+            <div class="chart-bar-label">${c.nombre}</div>
+            <div class="chart-bar-bg"><div class="chart-bar-fill" style="width:${pct}%;background:var(--info)"></div></div>
+            <div class="chart-bar-value">${formatMoney(c.total_comprado)}</div>
+          </div>`;
+        }).join('')}
+      </div>`;
+
+  const totEnt  = flujo.entradas.reduce((s,e)=>s+e.monto, 0);
+  const totSal  = flujo.salidas.reduce((s,e)=>s+e.monto, 0);
+  const neto    = totEnt - totSal;
+  document.getElementById('repFlujo').innerHTML = `
+    <div class="grid grid-2 mb-4">
+      <div class="card card-sm"><p class="text-sm text-muted">Entradas</p>
+        <p class="text-xl font-bold text-success">${formatMoney(totEnt)}</p></div>
+      <div class="card card-sm"><p class="text-sm text-muted">Salidas</p>
+        <p class="text-xl font-bold text-danger">${formatMoney(totSal)}</p></div>
+    </div>
+    <div class="flex justify-between font-bold" style="font-size:16px">
+      <span>Flujo Neto</span>
+      <span class="${neto>=0?'text-success':'text-danger'}">${formatMoney(neto)}</span>
+    </div>
+    <div class="mt-4">
+      ${flujo.salidas.slice(0,6).map(s=>`
+        <div class="flex justify-between text-sm py-2" style="border-bottom:1px solid var(--border)">
+          <span class="text-muted">${s.tipo}: ${s.referencia}</span>
+          <span class="text-danger">-${formatMoney(s.monto)}</span>
+        </div>`).join('')}
+    </div>`;
+}
+
+// ── TAB 2: ESTADO DE RESULTADOS ───────────────────────────────────────────────
+function renderEstadoResultados(er) {
+  const negocio = _cfg.nombre_negocio || 'Mi Negocio';
+  const fmtFecha = iso => new Date(iso+'T12:00:00').toLocaleDateString('es',{day:'2-digit',month:'long',year:'numeric'});
+
+  function fila(label, val, cls='', indent=false, bold=false) {
+    const neg = val < 0;
+    const disp = neg ? `(${formatMoney(Math.abs(val))})` : formatMoney(val);
+    return `<tr class="${bold?'er-tr-bold':''}">
+      <td class="er-td-label" style="padding-left:${indent?'2rem':'4px'}">${label}</td>
+      <td class="er-td-val ${cls}">${disp}</td>
+    </tr>`;
+  }
+
+  function seccion(titulo) {
+    return `<tr><td colspan="2" class="er-seccion">${titulo}</td></tr>`;
+  }
+
+  const gastoRows = er.gastos.length === 0
+    ? `<tr><td colspan="2" class="er-td-label" style="padding-left:2rem;color:var(--text-muted);font-size:0.82rem;padding:8px 4px 8px 2rem">Sin gastos registrados en este período</td></tr>`
+    : er.gastos.map(g => fila(
+        g.categoria.charAt(0).toUpperCase()+g.categoria.slice(1),
+        g.total, '', true)).join('');
+
+  document.getElementById('repEstadoResultados').innerHTML = `
+    <div class="card er-card print-section">
+      <div class="er-header">
+        <span class="er-header-icon">📊</span>
+        <div class="er-header-info">
+          <div class="er-negocio">${negocio}</div>
+          <div class="er-titulo-doc">ESTADO DE RESULTADOS</div>
+          <div class="er-periodo">Del ${fmtFecha(er.desde)} al ${fmtFecha(er.hasta)}</div>
+        </div>
+        <button class="btn btn-ghost no-print" style="margin-left:auto;font-size:0.82rem;self-align:flex-start;border:1px solid var(--border)"
+          onclick="exportarEstadoResultados()">💾 Exportar CSV</button>
+      </div>
+
+      <table class="er-table">
+        <tbody>
+          ${seccion('INGRESOS')}
+          ${fila('Ventas brutas',             er.ventas.total_ventas,                   'er-pos', true)}
+          ${fila('(−) Descuentos concedidos', -er.ventas.total_descuentos,              'er-neg', true)}
+          ${fila('= VENTAS NETAS',            er.ventas_netas,                          'er-pos', false, true)}
+
+          ${seccion('COSTO DE MERCANCÍA VENDIDA')}
+          ${fila('(−) Costo de productos vendidos', -er.cmv,                            'er-neg', true)}
+          <tr class="er-tr-bold er-tr-destacado">
+            <td class="er-td-label">= UTILIDAD BRUTA</td>
+            <td class="er-td-val ${er.utilidad_bruta>=0?'er-pos':'er-neg'}">${formatMoney(er.utilidad_bruta)}</td>
+          </tr>
+          <tr>
+            <td class="er-td-label" style="padding-left:2rem;color:var(--text-muted);font-size:0.8rem">Margen bruto</td>
+            <td class="er-td-val" style="color:var(--text-muted);font-size:0.8rem">${er.margen_bruto}%</td>
+          </tr>
+
+          ${seccion('GASTOS OPERATIVOS')}
+          ${gastoRows}
+          ${fila('= TOTAL GASTOS OPERATIVOS', er.total_gastos, 'er-neg', false, true)}
+
+          <tr><td colspan="2" style="padding:4px 0">
+            <hr style="border:none;border-top:2px solid var(--primary);opacity:0.35;margin:6px 0"/>
+          </td></tr>
+          <tr class="er-tr-utilidad-neta">
+            <td class="er-td-label">🏆 UTILIDAD NETA DEL PERÍODO</td>
+            <td class="er-td-val ${er.utilidad_neta>=0?'er-pos-strong':'er-neg-strong'}">${formatMoney(er.utilidad_neta)}</td>
+          </tr>
+          <tr>
+            <td class="er-td-label" style="padding-left:2rem;color:var(--text-muted);font-size:0.8rem">Margen neto</td>
+            <td class="er-td-val" style="color:var(--text-muted);font-size:0.8rem">${er.margen_neto}%</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Cajas de información adicional -->
+      <div class="grid grid-2 mt-5" style="gap:1rem">
+        <div class="er-infobox">
+          <div class="er-infobox-titulo">💳 Detalle de Cobros</div>
+          <div class="er-infobox-row"><span>💵 Efectivo</span><span>${formatMoney(er.ventas.efectivo||0)}</span></div>
+          <div class="er-infobox-row"><span>📱 Transf. / QR</span><span>${formatMoney(er.ventas.transferencia||0)}</span></div>
+          <div class="er-infobox-row"><span>💳 Tarjeta</span><span>${formatMoney(er.ventas.tarjeta||0)}</span></div>
+          <div class="er-infobox-row er-infobox-total">
+            <span>Total · ${er.ventas.cantidad} facturas</span>
+            <span>${formatMoney(er.ventas.total_ventas)}</span>
+          </div>
+        </div>
+        <div class="er-infobox">
+          <div class="er-infobox-titulo">🛒 Movimientos del Período</div>
+          <div class="er-infobox-row"><span>Órdenes de compra</span><span>${er.compras.cantidad}</span></div>
+          <div class="er-infobox-row"><span>Inversión en compras</span><span>${formatMoney(er.compras.total)}</span></div>
+          <div class="er-infobox-row"><span>Ventas anuladas</span><span>${er.anuladas.cantidad}</span></div>
+          <div class="er-infobox-row er-infobox-total">
+            <span>Monto anulado</span>
+            <span class="er-neg">${formatMoney(er.anuladas.total)}</span>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── TAB 3: GANANCIAS POR PRODUCTO ─────────────────────────────────────────────
+function renderGanancias(ganancias) {
+  if (!ganancias.length) {
+    document.getElementById('repGanancias').innerHTML =
+      `<div class="empty-state"><div class="es-icon">💰</div><h3>Sin ventas en este período</h3></div>`;
+    return;
+  }
+
+  const totIngreso  = +ganancias.reduce((s,g)=>s+g.ingreso_total,  0).toFixed(2);
+  const totCosto    = +ganancias.reduce((s,g)=>s+g.costo_total,    0).toFixed(2);
+  const totGanancia = +ganancias.reduce((s,g)=>s+g.ganancia,       0).toFixed(2);
+  const margenTotal = totIngreso > 0 ? +((totGanancia/totIngreso)*100).toFixed(1) : 0;
+
+  function badgeMargen(pct) {
+    const cls = pct >= 35 ? 'badge-green' : pct >= 15 ? 'badge-yellow' : 'badge-red';
+    return `<span class="badge ${cls}">${pct}%</span>`;
+  }
+
+  document.getElementById('repGanancias').innerHTML = `
+    <div class="grid grid-3 mb-5" style="gap:1rem">
+      <div class="stat-card">
+        <div class="stat-icon green">↑</div>
+        <div class="stat-info"><h3>${formatMoney(totIngreso)}</h3><p>Ingresos por ventas</p></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon red">↓</div>
+        <div class="stat-info"><h3>${formatMoney(totCosto)}</h3><p>Costo de mercancía vendida</p></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon ${totGanancia>=0?'purple':'red'}">◈</div>
+        <div class="stat-info">
+          <h3 class="${totGanancia>=0?'text-success':'text-danger'}">${formatMoney(totGanancia)}</h3>
+          <p>Ganancia bruta · ${margenTotal}% margen</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card print-section">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="font-bold">💰 Ganancias por Producto</h3>
+        <button class="btn btn-ghost no-print" style="font-size:0.82rem;border:1px solid var(--border)"
+          onclick="exportarGanancias()">💾 Exportar CSV</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Código</th><th>Producto</th><th>Categoría</th>
+            <th class="text-right">Qty</th>
+            <th class="text-right">P.Venta</th>
+            <th class="text-right">P.Compra</th>
+            <th class="text-right">Ingreso</th>
+            <th class="text-right">Costo</th>
+            <th class="text-right">Ganancia</th>
+            <th class="text-right">Margen</th>
+          </tr></thead>
+          <tbody>
+            ${ganancias.map(g=>`
+              <tr>
+                <td style="font-size:0.75rem;color:var(--text-muted);font-family:monospace">${g.codigo||'—'}</td>
+                <td style="font-weight:500">${g.nombre}</td>
+                <td><span style="font-size:0.75rem;color:var(--text-muted)">${g.categoria}</span></td>
+                <td class="text-right">${g.qty_vendida}</td>
+                <td class="text-right">${formatMoney(g.precio_venta_prom)}</td>
+                <td class="text-right">${formatMoney(g.precio_compra)}</td>
+                <td class="text-right">${formatMoney(g.ingreso_total)}</td>
+                <td class="text-right" style="color:var(--danger-light)">${formatMoney(g.costo_total)}</td>
+                <td class="text-right font-semibold ${g.ganancia>=0?'text-success':'text-danger'}">${formatMoney(g.ganancia)}</td>
+                <td class="text-right">${badgeMargen(g.margen_pct)}</td>
+              </tr>`).join('')}
+          </tbody>
+          <tfoot>
+            <tr style="background:var(--bg-elevated);font-weight:700;border-top:2px solid var(--border)">
+              <td colspan="6" style="font-weight:700;padding:12px 16px">TOTALES DEL PERÍODO</td>
+              <td class="text-right" style="padding:12px 16px">${formatMoney(totIngreso)}</td>
+              <td class="text-right" style="padding:12px 16px;color:var(--danger-light)">${formatMoney(totCosto)}</td>
+              <td class="text-right ${totGanancia>=0?'text-success':'text-danger'}" style="padding:12px 16px">${formatMoney(totGanancia)}</td>
+              <td class="text-right" style="padding:12px 16px">${badgeMargen(margenTotal)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>`;
+}
+
+// ── TAB 4: LIBROS CONTABLES ───────────────────────────────────────────────────
+function renderContabilidad(libros) {
+  const totVentas  = libros.ventas.filter(v=>v.estado!=='anulada').reduce((s,v)=>s+v.total, 0);
+  const totCompras = libros.compras.reduce((s,c)=>s+c.total, 0);
+  const totGastos  = libros.gastos.reduce((s,g)=>s+g.monto, 0);
+
+  function estadoBadge(e) {
+    const m = { completada:'badge-green', pagada:'badge-green', credito:'badge-yellow', pendiente:'badge-yellow', anulada:'badge-red' };
+    return `<span class="badge ${m[e]||'badge-gray'}">${e}</span>`;
+  }
+
+  document.getElementById('repContabilidad').innerHTML = `
+    <!-- Exportación -->
+    <div class="card mb-5 no-print">
+      <h3 class="font-bold mb-2">💾 Exportar Libros Contables</h3>
+      <p class="text-sm text-muted mb-4">Archivos CSV compatibles con Excel, con codificación UTF-8 y BOM para caracteres en español.</p>
+      <div class="flex gap-2 flex-wrap">
+        <button class="btn btn-primary"  onclick="exportarTodoCSV()">📦 Exportar Todo (5 archivos)</button>
+        <button class="btn btn-ghost" style="border:1px solid var(--border)" onclick="exportarLibroVentas()">🧾 Libro de Ventas</button>
+        <button class="btn btn-ghost" style="border:1px solid var(--border)" onclick="exportarLibroCompras()">🛒 Libro de Compras</button>
+        <button class="btn btn-ghost" style="border:1px solid var(--border)" onclick="exportarLibroGastos()">📋 Libro de Gastos</button>
+        <button class="btn btn-ghost" style="border:1px solid var(--border)" onclick="exportarGanancias()">💰 Ganancias CSV</button>
+        <button class="btn btn-ghost" style="border:1px solid var(--border)" onclick="exportarEstadoResultados()">📊 Estado de Resultados</button>
+        <button class="btn btn-ghost" style="border:1px solid var(--border)" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+      </div>
+    </div>
+
+    <!-- Libro de Ventas -->
+    <div class="card mb-6 print-section">
+      <div class="flex justify-between items-center mb-3">
+        <div>
+          <h3 class="font-bold">🧾 Libro de Ventas</h3>
+          <p class="text-xs text-muted">${libros.ventas.length} registros · Cobrado: <strong class="text-success">${formatMoney(totVentas)}</strong></p>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>N° Factura</th><th>Fecha</th><th>Cliente</th>
+            <th class="text-right">Subtotal</th><th class="text-right">Desc.</th>
+            <th class="text-right">IVA</th><th class="text-right">Total</th>
+            <th>Método</th><th>Estado</th>
+          </tr></thead>
+          <tbody>
+            ${libros.ventas.length === 0
+              ? `<tr><td colspan="9" class="text-center" style="padding:20px;color:var(--text-muted)">Sin ventas en este período</td></tr>`
+              : libros.ventas.map(v=>`
+              <tr style="${v.estado==='anulada'?'opacity:0.45':''}">
+                <td style="font-family:monospace;font-size:0.8rem">${v.numero}</td>
+                <td style="white-space:nowrap;font-size:0.85rem">${v.fecha}</td>
+                <td style="font-size:0.9rem">${v.cliente}</td>
+                <td class="text-right">${formatMoney(v.subtotal)}</td>
+                <td class="text-right">${v.descuento>0?'<span style="color:var(--danger-light)">-'+formatMoney(v.descuento)+'</span>':'—'}</td>
+                <td class="text-right">${v.impuesto>0?formatMoney(v.impuesto):'—'}</td>
+                <td class="text-right font-semibold">${formatMoney(v.total)}</td>
+                <td style="font-size:0.78rem">${v.metodo_pago}</td>
+                <td>${estadoBadge(v.estado)}</td>
+              </tr>`).join('')}
+          </tbody>
+          ${libros.ventas.length>0?`<tfoot><tr style="font-weight:700;background:var(--bg-elevated)">
+            <td colspan="6" style="padding:10px 16px">TOTAL (excl. anuladas)</td>
+            <td class="text-right text-success" style="padding:10px 16px">${formatMoney(totVentas)}</td>
+            <td colspan="2"></td>
+          </tr></tfoot>`:''}
+        </table>
+      </div>
+    </div>
+
+    <!-- Libro de Compras -->
+    <div class="card mb-6 print-section">
+      <div class="mb-3">
+        <h3 class="font-bold">🛒 Libro de Compras</h3>
+        <p class="text-xs text-muted">${libros.compras.length} registros · Total: <strong style="color:var(--danger-light)">${formatMoney(totCompras)}</strong></p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>N° Orden</th><th>Fecha</th><th>Proveedor</th>
+            <th class="text-right">Subtotal</th><th class="text-right">IVA</th>
+            <th class="text-right">Total</th><th class="text-right">Pagado</th><th>Estado</th>
+          </tr></thead>
+          <tbody>
+            ${libros.compras.length === 0
+              ? `<tr><td colspan="8" class="text-center" style="padding:20px;color:var(--text-muted)">Sin compras en este período</td></tr>`
+              : libros.compras.map(c=>`
+              <tr>
+                <td style="font-family:monospace;font-size:0.8rem">${c.numero||'—'}</td>
+                <td style="white-space:nowrap;font-size:0.85rem">${c.fecha}</td>
+                <td style="font-size:0.9rem">${c.proveedor}</td>
+                <td class="text-right">${formatMoney(c.subtotal)}</td>
+                <td class="text-right">${c.impuesto>0?formatMoney(c.impuesto):'—'}</td>
+                <td class="text-right font-semibold">${formatMoney(c.total)}</td>
+                <td class="text-right">${formatMoney(c.pagado)}</td>
+                <td>${estadoBadge(c.estado)}</td>
+              </tr>`).join('')}
+          </tbody>
+          ${libros.compras.length>0?`<tfoot><tr style="font-weight:700;background:var(--bg-elevated)">
+            <td colspan="5" style="padding:10px 16px">TOTAL COMPRAS</td>
+            <td class="text-right" style="padding:10px 16px;color:var(--danger-light)">${formatMoney(totCompras)}</td>
+            <td colspan="2"></td>
+          </tr></tfoot>`:''}
+        </table>
+      </div>
+    </div>
+
+    <!-- Libro de Gastos -->
+    <div class="card print-section">
+      <div class="mb-3">
+        <h3 class="font-bold">📋 Libro de Gastos Operativos</h3>
+        <p class="text-xs text-muted">${libros.gastos.length} registros · Total: <strong style="color:var(--danger-light)">${formatMoney(totGastos)}</strong></p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Fecha</th><th>Concepto</th><th>Categoría</th>
+            <th class="text-right">Monto</th><th>Notas</th>
+          </tr></thead>
+          <tbody>
+            ${libros.gastos.length === 0
+              ? `<tr><td colspan="5" class="text-center" style="padding:20px;color:var(--text-muted)">Sin gastos en este período</td></tr>`
+              : libros.gastos.map(g=>`
+              <tr>
+                <td style="white-space:nowrap;font-size:0.85rem">${g.fecha}</td>
+                <td style="font-size:0.9rem">${g.concepto}</td>
+                <td><span style="font-size:0.75rem;color:var(--text-muted)">${g.categoria}</span></td>
+                <td class="text-right font-semibold" style="color:var(--danger-light)">${formatMoney(g.monto)}</td>
+                <td style="font-size:0.78rem;color:var(--text-muted)">${g.notas||'—'}</td>
+              </tr>`).join('')}
+          </tbody>
+          ${libros.gastos.length>0?`<tfoot><tr style="font-weight:700;background:var(--bg-elevated)">
+            <td colspan="3" style="padding:10px 16px">TOTAL GASTOS</td>
+            <td class="text-right" style="padding:10px 16px;color:var(--danger-light)">${formatMoney(totGastos)}</td>
+            <td></td>
+          </tr></tfoot>`:''}
+        </table>
+      </div>
+    </div>`;
+}
+
+// ── EXPORTACIONES CSV ─────────────────────────────────────────────────────────
+function csvE(v) {
+  if (v === null || v === undefined) return '';
+  const s = String(v);
+  return (s.includes(',') || s.includes('"') || s.includes('\n'))
+    ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function toCSV(headers, rows) {
+  return [headers, ...rows].map(r => r.map(csvE).join(',')).join('\r\n');
+}
+
+function descargarCSV(filename, csv) {
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+function exportarLibroVentas() {
+  const l = _repData.libros; if (!l) return;
+  descargarCSV(`libro_ventas_${l.desde}_${l.hasta}.csv`, toCSV(
+    ['N° Factura','Fecha','Cliente','Subtotal','Descuento','IVA','Total','Método','Estado','Notas'],
+    l.ventas.map(v=>[v.numero,v.fecha,v.cliente,v.subtotal,v.descuento,v.impuesto,v.total,v.metodo_pago,v.estado,v.notas])
+  ));
+}
+
+function exportarLibroCompras() {
+  const l = _repData.libros; if (!l) return;
+  descargarCSV(`libro_compras_${l.desde}_${l.hasta}.csv`, toCSV(
+    ['N° Orden','Fecha','Proveedor','Subtotal','IVA','Total','Pagado','Estado','Notas'],
+    l.compras.map(c=>[c.numero||'',c.fecha,c.proveedor,c.subtotal,c.impuesto,c.total,c.pagado,c.estado,c.notas])
+  ));
+}
+
+function exportarLibroGastos() {
+  const l = _repData.libros; if (!l) return;
+  descargarCSV(`libro_gastos_${l.desde}_${l.hasta}.csv`, toCSV(
+    ['Fecha','Concepto','Categoría','Monto','Notas'],
+    l.gastos.map(g=>[g.fecha,g.concepto,g.categoria,g.monto,g.notas])
+  ));
+}
+
+function exportarEstadoResultados() {
+  const er = _repData.estadoRes; if (!er) return;
+  const filas = [
+    ['ESTADO DE RESULTADOS', ''],
+    ['Período', `${er.desde} al ${er.hasta}`],
+    ['',''],
+    ['INGRESOS',''],
+    ['Ventas brutas',     er.ventas.total_ventas],
+    ['Descuentos',       -er.ventas.total_descuentos],
+    ['= Ventas netas',   er.ventas_netas],
+    ['',''],
+    ['COSTO DE MERCANCÍA VENDIDA',''],
+    ['Costo productos vendidos', er.cmv],
+    ['= Utilidad bruta', er.utilidad_bruta],
+    ['Margen bruto %',   er.margen_bruto+'%'],
+    ['',''],
+    ['GASTOS OPERATIVOS',''],
+    ...er.gastos.map(g=>[g.categoria, g.total]),
+    ['= Total gastos',   er.total_gastos],
+    ['',''],
+    ['= UTILIDAD NETA',  er.utilidad_neta],
+    ['Margen neto %',    er.margen_neto+'%'],
+    ['',''],
+    ['DETALLE DE COBROS',''],
+    ['Efectivo',         er.ventas.efectivo||0],
+    ['Transferencia/QR', er.ventas.transferencia||0],
+    ['Tarjeta',          er.ventas.tarjeta||0],
+    ['Total facturas',   er.ventas.cantidad],
+    ['',''],
+    ['COMPRAS DEL PERÍODO',''],
+    ['Órdenes de compra',er.compras.cantidad],
+    ['Total compras',    er.compras.total],
+    ['Ventas anuladas',  er.anuladas.cantidad],
+    ['Monto anulado',    er.anuladas.total],
+  ];
+  descargarCSV(`estado_resultados_${er.desde}_${er.hasta}.csv`, toCSV(['Concepto','Valor'], filas));
+}
+
+function exportarGanancias() {
+  const g = _repData.ganancias; if (!g) return;
+  descargarCSV(`ganancias_${document.getElementById('repDesde').value}_${document.getElementById('repHasta').value}.csv`,
+    toCSV(
+      ['Código','Producto','Categoría','Qty Vendida','P.Venta Promedio','P.Compra','Ingreso Total','Costo Total','Ganancia','Margen %'],
+      g.map(r=>[r.codigo,r.nombre,r.categoria,r.qty_vendida,r.precio_venta_prom,r.precio_compra,r.ingreso_total,r.costo_total,r.ganancia,r.margen_pct])
+    ));
+}
+
+function exportarTodoCSV() {
+  exportarLibroVentas();
+  setTimeout(exportarLibroCompras,    400);
+  setTimeout(exportarLibroGastos,     800);
+  setTimeout(exportarEstadoResultados,1200);
+  setTimeout(exportarGanancias,       1600);
+  toast('📦 Exportando 5 archivos CSV...', 'success', 5000);
+}
+</script>

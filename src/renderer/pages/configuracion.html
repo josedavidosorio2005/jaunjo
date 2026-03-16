@@ -1,0 +1,490 @@
+<!-- CONFIGURACIÓN -->
+<div class="page-header">
+  <div><h1>Configuración</h1><p>Personaliza tu sistema</p></div>
+  <button class="btn btn-primary" onclick="guardarConfig()">&#x1F4BE; Guardar cambios</button>
+</div>
+
+<!-- Personalización Rápida + Mi Cuenta -->
+<div class="grid grid-2 mb-6" style="gap:1.25rem">
+
+  <!-- Personalización Rápida -->
+  <div class="card" style="border-left:4px solid var(--primary)">
+    <h3 class="font-bold mb-4">⚡ Personalización Rápida</h3>
+
+    <div class="form-group mb-3">
+      <label style="font-size:0.85rem;font-weight:600;margin-bottom:6px;display:block">🏷️ Nombre del Local</label>
+      <div class="flex gap-2">
+        <input id="quickNombre" placeholder="Nombre de tu negocio" style="flex:1" />
+        <button class="btn btn-primary" onclick="guardarNombreRapido()" title="Cambiar nombre">✔ Aplicar</button>
+      </div>
+      <p class="text-xs text-muted mt-1">Se actualiza en la barra lateral y título de inmediato.</p>
+    </div>
+
+    <label style="font-size:0.85rem;font-weight:600;margin-bottom:8px;display:block">📦 Accesos Rápidos</label>
+    <div class="flex gap-2">
+      <button class="btn btn-primary" style="flex:1" onclick="navegarA('inventario')">📋 Ver Inventario</button>
+      <button class="btn btn-ghost" style="flex:1;border:1px solid var(--border)" onclick="irAgregarProducto()">➕ Agregar Producto</button>
+    </div>
+  </div>
+
+  <!-- Mi Cuenta -->
+  <div class="card" style="border-left:4px solid var(--success)">
+    <h3 class="font-bold mb-4">👤 Mi Cuenta</h3>
+    <div id="miCuentaInfo" class="text-sm text-muted mb-3"></div>
+    <div class="form-group">
+      <label>Nombre para mostrar</label>
+      <input id="mcNombre" placeholder="Tu nombre" />
+    </div>
+    <div class="form-group">
+      <label>Nueva contraseña</label>
+      <div class="pass-field-wrap">
+        <input id="mcPass" type="password" placeholder="Dejar vacío para no cambiar" autocomplete="new-password"/>
+        <button type="button" class="pass-toggle" onclick="toggleMcPass()" id="mcPassToggle">👁️</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Confirmar contraseña</label>
+      <input id="mcPassConf" type="password" placeholder="Repite la nueva contraseña" autocomplete="new-password"/>
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="guardarMiCuenta()">💾 Guardar Mi Cuenta</button>
+  </div>
+
+</div>
+
+<div class="grid grid-2">
+  <!-- Información del Negocio -->
+  <div class="card">
+    <h3 class="font-bold mb-4">🏪 Información del Negocio</h3>
+    <div class="form-group">
+      <label>Nombre del Negocio</label>
+      <input id="cfgNombre" placeholder="Mi Negocio" />
+    </div>
+    <div class="form-group">
+      <label>Tipo de Negocio</label>
+      <select id="cfgTipo">
+        <option value="tienda">Tienda / Minimercado</option>
+        <option value="restaurante">Restaurante / Cafetería</option>
+        <option value="ferreteria">Ferretería</option>
+        <option value="farmacia">Farmacia</option>
+        <option value="servicios">Servicios</option>
+        <option value="otro">Otro</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Dirección</label>
+      <input id="cfgDireccion" placeholder="Dirección del negocio"/>
+    </div>
+    <div class="form-group">
+      <label>Teléfono</label>
+      <input id="cfgTelefono" placeholder="Teléfono"/>
+    </div>
+    <div class="form-group">
+      <label>Email</label>
+      <input id="cfgEmail" placeholder="Email del negocio"/>
+    </div>
+  </div>
+
+  <!-- Moneda e Impuestos -->
+  <div class="card">
+    <h3 class="font-bold mb-4">💱 Moneda e Impuestos</h3>
+    <div class="form-row form-row-2">
+      <div class="form-group">
+        <label>Moneda</label>
+        <select id="cfgMoneda">
+          <option value="USD">USD - Dólar</option>
+          <option value="EUR">EUR - Euro</option>
+          <option value="MXN">MXN - Peso Mexicano</option>
+          <option value="COP">COP - Peso Colombiano</option>
+          <option value="ARS">ARS - Peso Argentino</option>
+          <option value="PEN">PEN - Sol Peruano</option>
+          <option value="CLP">CLP - Peso Chileno</option>
+          <option value="BRL">BRL - Real Brasileño</option>
+          <option value="VES">VES - Bolívar Venezolano</option>
+          <option value="GTQ">GTQ - Quetzal</option>
+          <option value="HNL">HNL - Lempira</option>
+          <option value="NIO">NIO - Córdoba</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Símbolo</label>
+        <input id="cfgSimbolo" placeholder="$" maxlength="5" />
+      </div>
+    </div>
+    <div class="form-row form-row-2">
+      <div class="form-group">
+        <label>% Impuesto (IVA)</label>
+        <input id="cfgImpuestoPct" type="number" step="0.01" min="0" max="100" placeholder="16"/>
+      </div>
+      <div class="form-group">
+        <label>Aplicar impuesto</label>
+        <select id="cfgAplicaImp">
+          <option value="1">Sí, aplicar impuesto</option>
+          <option value="0">No, precio final</option>
+        </select>
+      </div>
+    </div>
+
+    <h3 class="font-bold mb-4 mt-4">🧾 Facturación</h3>
+    <div class="form-row form-row-2">
+      <div class="form-group">
+        <label>Prefijo de factura</label>
+        <input id="cfgPrefijo" placeholder="FAC-" maxlength="10"/>
+      </div>
+      <div class="form-group">
+        <label>Siguiente número</label>
+        <input id="cfgSiguiente" type="number" min="1"/>
+      </div>
+    </div>
+  </div>
+
+  <!-- Apariencia -->
+  <div class="card">
+    <h3 class="font-bold mb-4">🎨 Apariencia</h3>
+    <div class="form-group">
+      <label>Color principal</label>
+      <div class="color-options mb-3" id="colorOpciones"></div>
+      <input type="hidden" id="cfgColor" />
+    </div>
+    <div class="form-group">
+      <label>Vista previa del color</label>
+      <div id="colorPreview" style="height:40px;border-radius:var(--radius-md);transition:background 0.3s"></div>
+    </div>
+  </div>
+
+  <!-- Módulos activos -->
+  <div class="card">
+    <h3 class="font-bold mb-4">🔧 Módulos Activos</h3>
+    <p class="text-muted text-sm mb-4">Activa o desactiva módulos según tu tipo de negocio</p>
+    <div id="modulosCheckboxes" class="flex flex-col gap-3"></div>
+  </div>
+</div>
+
+<!-- Métodos de Pago -->
+<div class="card mt-6" style="border-left:4px solid var(--success)">
+  <h3 class="font-bold mb-1">💳 Métodos de Pago</h3>
+  <p class="text-sm text-muted mb-4">Configura el código QR y los datos para pagos digitales en los pedidos</p>
+
+  <div class="grid grid-2" style="gap:1.5rem;align-items:start">
+
+    <!-- Subir imagen QR -->
+    <div>
+      <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:8px">📷 Imagen del QR de pago</label>
+      <div id="qrPreviewWrap" class="qr-cfg-preview">
+        <span class="text-muted text-sm">Sin imagen QR</span>
+      </div>
+      <label class="btn btn-ghost mt-2" style="cursor:pointer;display:inline-block;font-size:0.85rem;border:1px solid var(--border)">
+        📁 Seleccionar imagen
+        <input type="file" id="qrFileInput" accept="image/*" style="display:none" onchange="cargarImagenQR(this)"/>
+      </label>
+      <button class="btn btn-ghost mt-2" style="font-size:0.85rem;border:1px solid var(--border);color:var(--danger)"
+        onclick="eliminarQR()">🗑 Quitar QR</button>
+      <p class="text-xs text-muted mt-2">PNG, JPG o WEBP. Se recomienda fondo blanco y buena resolución.</p>
+    </div>
+
+    <!-- Info adicional -->
+    <div>
+      <div class="form-group">
+        <label>Datos bancarios / instrucciones de pago</label>
+        <textarea id="cfgQrInfo" rows="6" style="resize:vertical"
+          placeholder="Ej:&#10;Banco: Banesco&#10;Pago Móvil: 0412-000-0000&#10;Cédula: V-12345678&#10;Nombre: Mi Negocio"></textarea>
+        <p class="text-xs text-muted mt-1">Estos datos se muestran debajo del QR cuando el cliente elige &quot;Pago QR&quot;.</p>
+      </div>
+      <button class="btn btn-primary" onclick="guardarConfigQR()">💾 Guardar configuración QR</button>
+    </div>
+  </div>
+</div>
+
+<!-- Zona peligrosa -->
+<div class="card mt-6">
+  <h3 class="font-bold text-danger mb-3">⚠ Zona de restauración</h3>
+  <p class="text-muted text-sm mb-4">Restaura la configuración visual a los valores por defecto sin borrar datos.</p>
+  <button class="btn btn-danger" onclick="resetearConfig()">Restaurar configuración por defecto</button>
+</div>
+
+<script data-page-init>
+const MODULOS = [
+  { id: 'ventas',      label: '🧾 Ventas', desc: 'Punto de venta y facturas' },
+  { id: 'inventario',  label: '📦 Inventario', desc: 'Control de productos y stock' },
+  { id: 'clientes',    label: '👥 Clientes', desc: 'Registro y deudas' },
+  { id: 'compras',     label: '🛒 Compras', desc: 'Proveedores y gastos' },
+  { id: 'reportes',    label: '📊 Reportes', desc: 'Estadísticas y balance' }
+];
+
+const COLORES = [
+  '#6366f1','#8b5cf6','#ec4899','#ef4444','#f59e0b',
+  '#22c55e','#14b8a6','#3b82f6','#0ea5e9','#64748b'
+];
+
+let cfgActual = {};
+
+(async function() {
+  cfgActual = await api.config.obtener();
+  llenarFormulario();
+  renderColores();
+  renderModulos();
+  initQuickNombre();
+  initMiCuenta();
+})();
+
+function llenarFormulario() {
+  const c = cfgActual;
+  document.getElementById('cfgNombre').value       = c.nombre_negocio || '';
+  document.getElementById('cfgTipo').value         = c.tipo_negocio || 'tienda';
+  document.getElementById('cfgDireccion').value    = c.direccion || '';
+  document.getElementById('cfgTelefono').value     = c.telefono || '';
+  document.getElementById('cfgEmail').value        = c.email || '';
+  document.getElementById('cfgMoneda').value       = c.moneda || 'USD';
+  document.getElementById('cfgSimbolo').value      = c.simbolo_moneda || '$';
+  document.getElementById('cfgImpuestoPct').value  = c.impuesto_porcentaje || '16';
+  document.getElementById('cfgAplicaImp').value    = c.aplicar_impuesto ?? '1';
+  document.getElementById('cfgPrefijo').value      = c.prefijo_factura || 'FAC-';
+  document.getElementById('cfgSiguiente').value    = c.siguiente_numero || '1';
+  document.getElementById('cfgColor').value        = c.color_primario || '#6366f1';
+  document.getElementById('colorPreview').style.background = c.color_primario || '#6366f1';
+}
+
+function renderColores() {
+  const cont = document.getElementById('colorOpciones');
+  const actual = document.getElementById('cfgColor').value;
+  cont.innerHTML = '';
+  COLORES.forEach(c => {
+    const d = document.createElement('div');
+    d.className = 'color-dot' + (c === actual ? ' selected' : '');
+    d.style.background = c;
+    d.title = c;
+    d.onclick = () => {
+      cont.querySelectorAll('.color-dot').forEach(x => x.classList.remove('selected'));
+      d.classList.add('selected');
+      document.getElementById('cfgColor').value = c;
+      document.getElementById('colorPreview').style.background = c;
+    };
+    cont.appendChild(d);
+  });
+}
+
+function renderModulos() {
+  const activos = cfgActual.modulos_activos || ['ventas','inventario','clientes','compras','reportes'];
+  document.getElementById('modulosCheckboxes').innerHTML = MODULOS.map(m => `
+    <label class="flex items-center gap-3" style="cursor:pointer">
+      <input type="checkbox" id="mod_${m.id}" ${activos.includes(m.id)?'checked':''}
+        style="width:18px;height:18px;accent-color:var(--primary)" />
+      <div>
+        <div class="font-semibold">${m.label}</div>
+        <div class="text-xs text-muted">${m.desc}</div>
+      </div>
+    </label>`).join('');
+}
+
+async function guardarConfig() {
+  const modulosActivos = MODULOS
+    .filter(m => document.getElementById('mod_'+m.id)?.checked)
+    .map(m => m.id);
+
+  const cambios = {
+    nombre_negocio:       document.getElementById('cfgNombre').value,
+    tipo_negocio:         document.getElementById('cfgTipo').value,
+    direccion:            document.getElementById('cfgDireccion').value,
+    telefono:             document.getElementById('cfgTelefono').value,
+    email:                document.getElementById('cfgEmail').value,
+    moneda:               document.getElementById('cfgMoneda').value,
+    simbolo_moneda:       document.getElementById('cfgSimbolo').value,
+    impuesto_porcentaje:  document.getElementById('cfgImpuestoPct').value,
+    aplicar_impuesto:     document.getElementById('cfgAplicaImp').value,
+    prefijo_factura:      document.getElementById('cfgPrefijo').value,
+    siguiente_numero:     document.getElementById('cfgSiguiente').value,
+    color_primario:       document.getElementById('cfgColor').value,
+    modulos_activos:      modulosActivos
+  };
+
+  await api.config.guardar(cambios);
+
+  // Aplicar color de inmediato
+  document.documentElement.style.setProperty('--primary', cambios.color_primario);
+  await recargarConfig();
+
+  // Actualizar visibilidad del sidebar según módulos activos + permisos del rol
+  if (window.sesion) {
+    const PERMISOS_FIJOS = { admin:['dashboard','ventas','inventario','clientes','compras','reportes','configuracion','usuarios','pedido'], mesero:['dashboard','ventas','inventario','pedido'], cliente:['pedido'] };
+    const permitidos = PERMISOS_FIJOS[window.sesion.rol] || [];
+    document.querySelectorAll('.nav-item[data-page]').forEach(el => {
+      const pg = el.dataset.page;
+      const enPermisos  = permitidos.includes(pg);
+      const enModulos   = modulosActivos.includes(pg) || !MODULOS.find(m=>m.id===pg); // si no es un módulo configurable, no ocultar
+      el.classList.toggle('hidden', !enPermisos || !enModulos);
+    });
+  }
+
+  toast('¡Configuración guardada exitosamente!', 'success');
+}
+
+async function resetearConfig() {
+  const ok = await confirm('¿Restaurar la configuración visual por defecto?');
+  if (!ok) return;
+  await api.config.resetear();
+  cfgActual = await api.config.obtener();
+  llenarFormulario();
+  renderColores();
+  document.documentElement.style.setProperty('--primary', '#6366f1');
+  await recargarConfig();
+  toast('Configuración restaurada', 'success');
+}
+
+// ---- Mi Cuenta ----
+function initMiCuenta() {
+  const u = window.sesion;
+  if (!u) return;
+  const info = document.getElementById('miCuentaInfo');
+  if (info) {
+    const icons = { admin:'🔑', mesero:'🧾', cliente:'🛵' };
+    info.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;background:var(--bg-elevated);
+                  padding:10px 14px;border-radius:var(--radius-sm);margin-bottom:4px">
+        <span style="font-size:1.4rem">${icons[u.rol] || '👤'}</span>
+        <div>
+          <div style="font-weight:600;color:var(--text-primary)">${u.nombre}</div>
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;
+                      color:var(--primary-light);font-weight:700">@${u.usuario} · ${u.rol}</div>
+        </div>
+      </div>`;
+  }
+  const nmInput = document.getElementById('mcNombre');
+  if (nmInput) nmInput.value = u.nombre;
+}
+
+function toggleMcPass() {
+  const inp = document.getElementById('mcPass');
+  const btn = document.getElementById('mcPassToggle');
+  if (!inp) return;
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  btn.textContent = inp.type === 'password' ? '👁️' : '🙈';
+}
+
+async function guardarMiCuenta() {
+  const nombre  = document.getElementById('mcNombre')?.value.trim();
+  const pass    = document.getElementById('mcPass')?.value;
+  const passConf= document.getElementById('mcPassConf')?.value;
+
+  if (!nombre) { toast('El nombre no puede estar vacío', 'warning'); return; }
+
+  if (pass) {
+    if (pass.length < 4) { toast('La contraseña debe tener al menos 4 caracteres', 'warning'); return; }
+    if (pass !== passConf) { toast('Las contraseñas no coinciden', 'warning'); return; }
+  }
+
+  try {
+    const u = window.sesion;
+    await api.auth.actualizar({
+      id:       u.id,
+      nombre:   nombre,
+      usuario:  u.usuario,
+      rol:      u.rol,
+      activo:   1,
+      password: pass || ''
+    });
+
+    // Actualizar sesión local
+    window.sesion.nombre = nombre;
+    document.getElementById('sesionNombre').textContent = nombre;
+
+    // Limpiar campos de contraseña
+    document.getElementById('mcPass').value     = '';
+    document.getElementById('mcPassConf').value = '';
+    const t = document.getElementById('mcPassToggle');
+    if (t) { t.textContent = '👁️'; document.getElementById('mcPass').type = 'password'; }
+
+    toast('✔ Cuenta actualizada correctamente', 'success');
+    initMiCuenta();
+  } catch (e) {
+    toast('Error al guardar: ' + (e.message || e), 'error');
+  }
+}
+
+// ---- Personalización Rápida ----
+function initQuickNombre() {
+  const input = document.getElementById('quickNombre');
+  if (input) input.value = cfgActual.nombre_negocio || '';
+}
+
+async function guardarNombreRapido() {
+  const input = document.getElementById('quickNombre');
+  const nombre = input ? input.value.trim() : '';
+  if (!nombre) { toast('Escribe un nombre para el local', 'warning'); return; }
+
+  await api.config.guardar({ ...cfgActual, nombre_negocio: nombre });
+  cfgActual.nombre_negocio = nombre;
+
+  // Reflejar en sidebar y barra de título sin recargar
+  document.getElementById('appTitle').textContent = nombre;
+  document.getElementById('sidebarNombre').textContent = nombre;
+  document.title = nombre;
+
+  // Sincronizar con el campo completo de config
+  const cfgInput = document.getElementById('cfgNombre');
+  if (cfgInput) cfgInput.value = nombre;
+
+  toast(`✔ Nombre cambiado a "${nombre}"`, 'success');
+}
+
+function irAgregarProducto() {
+  navegarA('inventario');
+  // Esperar que cargue la página de inventario y luego abrir el modal
+  setTimeout(() => {
+    if (typeof abrirModalProducto === 'function') abrirModalProducto();
+  }, 600);
+}
+
+// Inicializar campo de nombre rápido al cargar
+initQuickNombre();
+initQRConfig();
+
+// ---- QR de pago ----
+function initQRConfig() {
+  const img = cfgActual.qr_pago_imagen;
+  const info = cfgActual.qr_pago_info || '';
+  const wrap = document.getElementById('qrPreviewWrap');
+  if (img) {
+    wrap.innerHTML = `<img src="${img}" alt="QR pago" class="qr-cfg-img" />`;
+  }
+  const infoEl = document.getElementById('cfgQrInfo');
+  if (infoEl) infoEl.value = info;
+}
+
+function cargarImagenQR(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const dataUrl = e.target.result;
+    const wrap = document.getElementById('qrPreviewWrap');
+    wrap.innerHTML = `<img src="${dataUrl}" alt="QR pago" class="qr-cfg-img" />`;
+    cfgActual._qrPendiente = dataUrl;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function eliminarQR() {
+  cfgActual._qrPendiente = '';
+  document.getElementById('qrPreviewWrap').innerHTML = '<span class="text-muted text-sm">Sin imagen QR</span>';
+  const fileInput = document.getElementById('qrFileInput');
+  if (fileInput) fileInput.value = '';
+  await api.config.guardar({ qr_pago_imagen: '' });
+  toast('QR eliminado', 'success');
+}
+
+async function guardarConfigQR() {
+  const cambios = {};
+  if (cfgActual._qrPendiente !== undefined) {
+    cambios.qr_pago_imagen = cfgActual._qrPendiente;
+    cfgActual.qr_pago_imagen = cfgActual._qrPendiente;
+    delete cfgActual._qrPendiente;
+  }
+  const infoEl = document.getElementById('cfgQrInfo');
+  if (infoEl) {
+    cambios.qr_pago_info = infoEl.value.trim();
+    cfgActual.qr_pago_info = cambios.qr_pago_info;
+  }
+  if (!Object.keys(cambios).length) { toast('No hay cambios que guardar', 'warning'); return; }
+  await api.config.guardar(cambios);
+  toast('✔ Configuración QR guardada', 'success');
+}
+</script>

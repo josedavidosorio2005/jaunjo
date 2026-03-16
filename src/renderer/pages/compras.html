@@ -1,0 +1,331 @@
+<!-- COMPRAS Y PROVEEDORES -->
+<div class="page-header">
+  <div><h1>Compras</h1><p>Proveedores, compras y gastos</p></div>
+  <div class="flex gap-2">
+    <button class="btn btn-ghost"   id="btnNuevoGasto"     onclick="abrirModalGasto()"     style="display:none">+ Registrar Gasto</button>
+    <button class="btn btn-primary" id="btnNuevaCompra"    onclick="abrirModalCompra()">+ Registrar Compra</button>
+    <button class="btn btn-ghost"   id="btnNuevoProveedor" onclick="abrirModalProveedor()" style="display:none">+ Proveedor</button>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="flex gap-2 mb-4" style="border-bottom:1px solid var(--border)">
+  <button class="btn btn-ghost" id="tabCompras"     onclick="cambiarVista('compras')"     style="border-radius:0">🛒 Compras</button>
+  <button class="btn btn-ghost" id="tabGastos"      onclick="cambiarVista('gastos')"      style="border-radius:0">💸 Gastos</button>
+  <button class="btn btn-ghost" id="tabProveedores" onclick="cambiarVista('proveedores')" style="border-radius:0">👤 Proveedores</button>
+</div>
+
+<!-- Vista Compras -->
+<div id="vistaCompras">
+  <div class="toolbar">
+    <input type="date" id="compDesde" style="width:160px"/>
+    <input type="date" id="compHasta" style="width:160px"/>
+    <button class="btn btn-ghost" onclick="cargarCompras()">Filtrar</button>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Número</th><th>Fecha</th><th>Proveedor</th><th>Total</th><th>Pagado</th><th>Estado</th></tr></thead>
+      <tbody id="tablaCompras"><tr><td colspan="6"><div class="spinner"></div></td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Vista Gastos -->
+<div id="vistaGastos" class="hidden">
+  <div class="toolbar">
+    <input type="date" id="gasDesde" style="width:160px"/>
+    <input type="date" id="gasHasta" style="width:160px"/>
+    <button class="btn btn-ghost" onclick="cargarGastos()">Filtrar</button>
+  </div>
+  <div id="resumenGastos" class="mb-4"></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Monto</th><th>Notas</th></tr></thead>
+      <tbody id="tablaGastos"><tr><td colspan="5"><div class="spinner"></div></td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Vista Proveedores -->
+<div id="vistaProveedores" class="hidden">
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Nombre</th><th>Teléfono</th><th>Email</th><th>Identificación</th><th>Pendiente</th><th></th></tr></thead>
+      <tbody id="tablaProveedores"><tr><td colspan="6"><div class="spinner"></div></td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<script data-page-init>
+let proveedoresCache = [];
+let productosCompra = [];
+
+(async function() {
+  const hoy = new Date().toISOString().split('T')[0];
+  const hace30 = new Date(Date.now()-30*86400000).toISOString().split('T')[0];
+  document.getElementById('compDesde').value = hace30;
+  document.getElementById('compHasta').value = hoy;
+  document.getElementById('gasDesde').value  = hace30;
+  document.getElementById('gasHasta').value  = hoy;
+  cambiarVista('compras');
+  await Promise.all([cargarCompras(), cargarProveedores(),
+    api.inventario.obtenerProductos({}).then(p => productosCompra = p)]);
+})();
+
+function cambiarVista(v) {
+  document.getElementById('vistaCompras').classList.toggle('hidden', v!=='compras');
+  document.getElementById('vistaGastos').classList.toggle('hidden', v!=='gastos');
+  document.getElementById('vistaProveedores').classList.toggle('hidden', v!=='proveedores');
+  document.getElementById('btnNuevaCompra').style.display    = v==='compras'     ? '' : 'none';
+  document.getElementById('btnNuevoGasto').style.display     = v==='gastos'      ? '' : 'none';
+  document.getElementById('btnNuevoProveedor').style.display = v==='proveedores' ? '' : 'none';
+  ['compras','gastos','proveedores'].forEach(t => {
+    const el = document.getElementById('tab'+t.charAt(0).toUpperCase()+t.slice(1));
+    if (el) { el.style.borderBottom = t===v?'2px solid var(--primary)':'none'; el.style.color = t===v?'var(--primary)':'var(--text-secondary)'; }
+  });
+  if (v==='gastos') cargarGastos();
+}
+
+// ===== COMPRAS =====
+async function cargarCompras() {
+  const desde = document.getElementById('compDesde').value;
+  const hasta = document.getElementById('compHasta').value;
+  const compras = await api.compras.obtenerCompras({ desde, hasta });
+  const tbody = document.getElementById('tablaCompras');
+  if (compras.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><div class="es-icon">🛒</div><h3>Sin compras en este período</h3></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = compras.map(c => `<tr>
+    <td class="font-semibold">${c.numero||'-'}</td>
+    <td class="text-muted text-sm">${formatDate(c.fecha)}</td>
+    <td>${c.proveedor_nombre||'Sin proveedor'}</td>
+    <td class="font-bold">${formatMoney(c.total)}</td>
+    <td>${formatMoney(c.pagado)}</td>
+    <td><span class="badge ${c.estado==='pagada'?'badge-green':'badge-yellow'}">${c.estado}</span></td>
+  </tr>`).join('');
+}
+
+// ===== GASTOS =====
+async function cargarGastos() {
+  const gastos = await api.compras.obtenerGastos();
+  const desde  = document.getElementById('gasDesde').value;
+  const hasta  = document.getElementById('gasHasta').value;
+  const filtrados = gastos.filter(g => {
+    const f = g.fecha ? g.fecha.split(' ')[0] : '';
+    return (!desde || f >= desde) && (!hasta || f <= hasta);
+  });
+  const totalGastos = filtrados.reduce((s, g) => s + g.monto, 0);
+  document.getElementById('resumenGastos').innerHTML = `
+    <div class="flex gap-4">
+      <div class="stat-card" style="flex:1;max-width:240px">
+        <div class="stat-icon red">💸</div>
+        <div class="stat-info"><h3>${formatMoney(totalGastos)}</h3><p>${filtrados.length} gastos en el período</p></div>
+      </div>
+    </div>`;
+  const tbody = document.getElementById('tablaGastos');
+  if (filtrados.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><div class="es-icon">💸</div><h3>Sin gastos registrados</h3></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = filtrados.map(g => `<tr>
+    <td class="text-muted text-sm">${g.fecha ? g.fecha.split(' ')[0] : '-'}</td>
+    <td class="font-semibold">${g.concepto}</td>
+    <td><span class="badge badge-gray">${g.categoria||'general'}</span></td>
+    <td class="font-bold text-danger">${formatMoney(g.monto)}</td>
+    <td class="text-muted">${g.notas||'-'}</td>
+  </tr>`).join('');
+}
+
+function abrirModalGasto() {
+  const hoy = new Date().toISOString().split('T')[0];
+  const cats = ['general','alquiler','servicios','salarios','transporte','mantenimiento','marketing','otro'];
+  abrirModal('Registrar Gasto', `
+    <div class="form-row form-row-2">
+      <div class="form-group"><label>Concepto *</label>
+        <input id="gasConcepto" placeholder="Ej: Pago de alquiler"/></div>
+      <div class="form-group"><label>Categoría</label>
+        <select id="gasCat">${cats.map(c=>`<option value="${c}">${c.charAt(0).toUpperCase()+c.slice(1)}</option>`).join('')}</select>
+      </div>
+    </div>
+    <div class="form-row form-row-2">
+      <div class="form-group"><label>Monto *</label>
+        <input id="gasMonto" type="number" step="0.01" min="0" placeholder="0.00"/></div>
+      <div class="form-group"><label>Fecha</label>
+        <input id="gasFecha" type="date" value="${hoy}"/></div>
+    </div>
+    <div class="form-group"><label>Notas</label>
+      <input id="gasNotas" placeholder="Detalle adicional..."/></div>
+  `, {
+    footer: `<button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+             <button class="btn btn-danger" onclick="guardarGasto()">Registrar Gasto</button>`
+  });
+}
+
+async function guardarGasto() {
+  const concepto = document.getElementById('gasConcepto').value.trim();
+  const monto    = parseFloat(document.getElementById('gasMonto').value);
+  if (!concepto) { toast('El concepto es obligatorio', 'error'); return; }
+  if (!monto || monto <= 0) { toast('Ingresa un monto válido', 'error'); return; }
+  await api.compras.registrarGasto({
+    concepto,
+    categoria: document.getElementById('gasCat').value,
+    monto,
+    fecha: document.getElementById('gasFecha').value,
+    notas: document.getElementById('gasNotas').value
+  });
+  toast('Gasto registrado', 'success');
+  cerrarModal();
+  cargarGastos();
+}
+
+// ===== PROVEEDORES =====
+async function cargarProveedores() {
+  proveedoresCache = await api.compras.obtenerProveedores();
+  const tbody = document.getElementById('tablaProveedores');
+  if (proveedoresCache.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><div class="es-icon">👤</div><h3>Sin proveedores</h3><p>Agrega tu primer proveedor</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = proveedoresCache.map(p => `<tr>
+    <td class="font-semibold">${p.nombre}</td>
+    <td class="text-muted">${p.telefono||'-'}</td>
+    <td class="text-muted">${p.email||'-'}</td>
+    <td class="text-muted">${p.identificacion||'-'}</td>
+    <td class="${p.saldo_pendiente>0?'text-warning font-bold':''}">${formatMoney(p.saldo_pendiente)}</td>
+    <td><button class="btn btn-ghost btn-sm" onclick="abrirModalProveedor(${p.id})">Editar</button></td>
+  </tr>`).join('');
+}
+
+function abrirModalProveedor(id) {
+  const p = id ? proveedoresCache.find(x => x.id === id) : null;
+  abrirModal(p ? 'Editar Proveedor' : 'Nuevo Proveedor', `
+    <div class="form-row form-row-2">
+      <div class="form-group"><label>Nombre *</label>
+        <input id="provNombre" value="${p?.nombre||''}" placeholder="Nombre del proveedor"/></div>
+      <div class="form-group"><label>Identificación</label>
+        <input id="provId" value="${p?.identificacion||''}" placeholder="RUC, NIT..."/></div>
+    </div>
+    <div class="form-row form-row-2">
+      <div class="form-group"><label>Teléfono</label>
+        <input id="provTel" value="${p?.telefono||''}" placeholder="+1 000 000 0000"/></div>
+      <div class="form-group"><label>Email</label>
+        <input id="provEmail" value="${p?.email||''}" placeholder="proveedor@mail.com"/></div>
+    </div>
+    <div class="form-group"><label>Dirección</label>
+      <input id="provDir" value="${p?.direccion||''}" /></div>
+    <div class="form-group"><label>Notas</label>
+      <input id="provNotas" value="${p?.notas||''}" /></div>
+  `, {
+    footer: `<button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+             <button class="btn btn-primary" onclick="guardarProveedor(${id||'null'})">Guardar</button>`
+  });
+}
+
+async function guardarProveedor(id) {
+  const nombre = document.getElementById('provNombre').value.trim();
+  if (!nombre) { toast('El nombre es obligatorio', 'error'); return; }
+  const datos = {
+    id,
+    nombre,
+    identificacion: document.getElementById('provId').value,
+    telefono:        document.getElementById('provTel').value,
+    email:           document.getElementById('provEmail').value,
+    direccion:       document.getElementById('provDir').value,
+    notas:           document.getElementById('provNotas').value
+  };
+  try {
+    if (id) await api.compras.actualizarProveedor(datos);
+    else    await api.compras.crearProveedor(datos);
+    toast(id ? 'Proveedor actualizado' : 'Proveedor creado', 'success');
+    cerrarModal();
+    cargarProveedores();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ===== MODAL NUEVA COMPRA =====
+let itemsCompra = [];
+
+function abrirModalCompra() {
+  itemsCompra = [];
+  const html = `
+    <div class="form-row form-row-2 mb-4">
+      <div class="form-group"><label>Proveedor</label>
+        <select id="compProv">
+          <option value="">Sin proveedor</option>
+          ${proveedoresCache.map(p => `<option value="${p.id}">${p.nombre}</option>`).join('')}
+        </select></div>
+      <div class="form-group"><label>Número de factura</label>
+        <input id="compNum" placeholder="Ej: FC-001"/></div>
+    </div>
+    <div class="form-group"><label>Agregar Producto</label>
+      <div class="flex gap-2">
+        <select id="compProdSel" style="flex:1">
+          <option value="">Seleccionar producto...</option>
+          ${productosCompra.map(p => `<option value="${p.id}" data-precio="${p.precio_compra}" data-nombre="${p.nombre}">${p.nombre}</option>`).join('')}
+        </select>
+        <input id="compProdQty"    type="number" value="1" min="1"    style="width:80px"  placeholder="Cant."/>
+        <input id="compProdPrecio" type="number"            step="0.01" style="width:100px" placeholder="Precio"/>
+        <button class="btn btn-primary btn-sm" onclick="agregarItemCompra()">+ Agregar</button>
+      </div>
+    </div>
+    <div id="compItems" class="mb-4"></div>
+    <div class="flex justify-between font-bold text-lg" id="compTotal">Total: $0.00</div>
+    <div class="form-group mt-4"><label>Notas</label><input id="compNotas" placeholder="Referencia o detalle adicional..."/></div>`;
+
+  abrirModal('Nueva Compra', html, { size: 'lg',
+    footer: `<button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+             <button class="btn btn-primary" onclick="guardarCompra()">💾 Guardar Compra</button>`
+  });
+
+  document.getElementById('compProdSel').addEventListener('change', e => {
+    const op = e.target.options[e.target.selectedIndex];
+    document.getElementById('compProdPrecio').value = op.dataset.precio || '';
+  });
+}
+
+function agregarItemCompra() {
+  const sel = document.getElementById('compProdSel');
+  const op = sel.options[sel.selectedIndex];
+  const productId = parseInt(sel.value);
+  if (!productId) { toast('Selecciona un producto', 'warning'); return; }
+  const qty    = parseFloat(document.getElementById('compProdQty').value) || 1;
+  const precio = parseFloat(document.getElementById('compProdPrecio').value) || 0;
+  if (precio <= 0) { toast('Ingresa un precio válido', 'warning'); return; }
+  const exist = itemsCompra.find(i => i.producto_id === productId);
+  if (exist) { exist.cantidad += qty; exist.total = +(exist.cantidad * exist.precio).toFixed(2); }
+  else itemsCompra.push({ producto_id: productId, nombre: op.dataset.nombre, cantidad: qty, precio, total: +(qty*precio).toFixed(2) });
+  renderItemsCompra();
+}
+
+function renderItemsCompra() {
+  const total = itemsCompra.reduce((s, i) => s + i.total, 0);
+  document.getElementById('compItems').innerHTML = itemsCompra.length === 0 ? '' : `
+    <div class="table-wrap"><table>
+      <thead><tr><th>Producto</th><th>Cant.</th><th>Precio</th><th>Total</th><th></th></tr></thead>
+      <tbody>${itemsCompra.map((i, idx) => `<tr>
+        <td>${i.nombre}</td><td>${i.cantidad}</td>
+        <td>${formatMoney(i.precio)}</td><td class="font-bold">${formatMoney(i.total)}</td>
+        <td><button class="btn btn-ghost btn-sm text-danger" onclick="quitarItemCompra(${idx})">✕</button></td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+  document.getElementById('compTotal').textContent = `Total: ${formatMoney(total)}`;
+}
+
+function quitarItemCompra(idx) { itemsCompra.splice(idx, 1); renderItemsCompra(); }
+
+async function guardarCompra() {
+  if (itemsCompra.length === 0) { toast('Agrega al menos un producto', 'error'); return; }
+  try {
+    await api.compras.registrarCompra({
+      numero:       document.getElementById('compNum').value || null,
+      proveedor_id: document.getElementById('compProv').value || null,
+      notas:        document.getElementById('compNotas').value || null,
+      detalle:      [...itemsCompra]
+    });
+    toast('Compra registrada exitosamente', 'success');
+    cerrarModal();
+    cargarCompras();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+</script>

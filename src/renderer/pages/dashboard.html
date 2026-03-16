@@ -1,0 +1,134 @@
+<!-- DASHBOARD -->
+<div class="page-header">
+  <div>
+    <h1>Dashboard</h1>
+    <p id="dashFecha">Cargando...</p>
+  </div>
+  <button class="btn btn-primary" onclick="navegarA('ventas')">+ Nueva Venta</button>
+</div>
+
+<!-- KPIs -->
+<div class="grid grid-4 mb-6" id="dashKpis">
+  <div class="stat-card">
+    <div class="stat-icon green">💰</div>
+    <div class="stat-info"><h3 id="kpiIngresos">-</h3><p>Ingresos hoy</p></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon blue">🧾</div>
+    <div class="stat-info"><h3 id="kpiVentas">-</h3><p>Ventas hoy</p></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon purple">📦</div>
+    <div class="stat-info"><h3 id="kpiStockBajo">-</h3><p>Alertas de stock</p></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon orange">👥</div>
+    <div class="stat-info"><h3 id="kpiClientes">-</h3><p>Clientes registrados</p></div>
+  </div>
+</div>
+
+<div class="grid grid-2 mb-6">
+  <!-- Últimas ventas -->
+  <div class="card">
+    <div class="flex justify-between items-center mb-4">
+      <h3 class="font-bold">Últimas Ventas</h3>
+      <button class="btn btn-ghost btn-sm" onclick="navegarA('ventas')">Ver todas →</button>
+    </div>
+    <div id="dashVentas"><div class="spinner"></div></div>
+  </div>
+
+  <!-- Stock Bajo -->
+  <div class="card">
+    <div class="flex justify-between items-center mb-4">
+      <h3 class="font-bold">⚠ Stock Bajo</h3>
+      <button class="btn btn-ghost btn-sm" onclick="navegarA('inventario')">Gestionar →</button>
+    </div>
+    <div id="dashStock"><div class="spinner"></div></div>
+  </div>
+</div>
+
+<!-- Balance del mes -->
+<div class="card">
+  <h3 class="font-bold mb-4">Balance del Mes</h3>
+  <div class="grid grid-3" id="dashBalance">
+    <div class="spinner"></div>
+  </div>
+</div>
+
+<script data-page-init>
+(async function() {
+  const hoy = new Date();
+  document.getElementById('dashFecha').textContent =
+    hoy.toLocaleDateString('es', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+
+  // KPIs
+  const [resHoy, stockBajo, clientes, balance] = await Promise.all([
+    api.ventas.obtenerResumenHoy(),
+    api.inventario.stockBajo(),
+    api.clientes.obtenerTodos({}),
+    api.reportes.balanceGeneral({})
+  ]);
+
+  document.getElementById('kpiIngresos').textContent = formatMoney(resHoy?.total_ingresos || 0);
+  document.getElementById('kpiVentas').textContent = resHoy?.total_ventas || 0;
+  document.getElementById('kpiStockBajo').textContent = stockBajo.length;
+  document.getElementById('kpiClientes').textContent = clientes.length;
+
+  // Últimas ventas
+  const ventas = await api.ventas.obtenerTodas({});
+  const ultimas = ventas.slice(0, 8);
+  if (ultimas.length === 0) {
+    document.getElementById('dashVentas').innerHTML = `<div class="empty-state" style="padding:30px 0">
+      <div class="es-icon" style="font-size:32px">🧾</div><h3>Sin ventas hoy</h3></div>`;
+  } else {
+    document.getElementById('dashVentas').innerHTML = `
+      <table><thead><tr>
+        <th>N°</th><th>Cliente</th><th>Total</th><th>Estado</th>
+      </tr></thead><tbody>
+        ${ultimas.map(v => `<tr>
+          <td class="text-sm text-muted">${v.numero}</td>
+          <td>${v.cliente_nombre || 'Público'}</td>
+          <td class="font-bold">${formatMoney(v.total)}</td>
+          <td>${badgeEstado(v.estado)}</td>
+        </tr>`).join('')}
+      </tbody></table>`;
+  }
+
+  // Stock bajo
+  if (stockBajo.length === 0) {
+    document.getElementById('dashStock').innerHTML = `<div class="alert alert-success">✓ Todo el inventario está en niveles normales.</div>`;
+  } else {
+    document.getElementById('dashStock').innerHTML = `
+      <table><thead><tr><th>Producto</th><th>Stock</th><th>Mínimo</th></tr></thead><tbody>
+        ${stockBajo.slice(0,8).map(p => `<tr>
+          <td>${p.nombre}</td>
+          <td class="text-danger font-bold">${p.stock}</td>
+          <td class="text-muted">${p.stock_minimo}</td>
+        </tr>`).join('')}
+      </tbody></table>`;
+  }
+
+  // Balance del mes
+  document.getElementById('dashBalance').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-icon green">↑</div>
+      <div class="stat-info"><h3>${formatMoney(balance.ingresos)}</h3><p>Ingresos</p></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon red">↓</div>
+      <div class="stat-info"><h3>${formatMoney(balance.egresos)}</h3><p>Egresos</p></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon ${balance.utilidad >= 0 ? 'purple' : 'red'}">◈</div>
+      <div class="stat-info">
+        <h3 class="${balance.utilidad >= 0 ? 'text-success' : 'text-danger'}">${formatMoney(balance.utilidad)}</h3>
+        <p>Utilidad neta</p>
+      </div>
+    </div>`;
+})();
+
+function badgeEstado(e) {
+  const m = { completada:'badge-green', credito:'badge-yellow', anulada:'badge-red' };
+  return `<span class="badge ${m[e]||'badge-gray'}">${e}</span>`;
+}
+</script>

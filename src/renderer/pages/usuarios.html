@@ -1,0 +1,214 @@
+<!-- USUARIOS -->
+<div class="page-header">
+  <div><h1>Usuarios</h1><p>Gestión de accesos y roles del sistema</p></div>
+  <button class="btn btn-primary" onclick="abrirModalUsuario()">+ Nuevo Usuario</button>
+</div>
+
+<!-- Info de roles -->
+<div class="grid grid-3 mb-6" style="gap:1rem">
+  <div class="card" style="border-left:4px solid var(--danger);padding:1rem">
+    <div class="flex items-center gap-2 mb-1">
+      <span style="font-size:1.3rem">🔑</span>
+      <span class="font-bold">Administrador</span>
+    </div>
+    <p class="text-xs text-muted">Acceso total al sistema: ventas, inventario, clientes, compras, reportes, configuración y gestión de usuarios.</p>
+  </div>
+  <div class="card" style="border-left:4px solid var(--primary);padding:1rem">
+    <div class="flex items-center gap-2 mb-1">
+      <span style="font-size:1.3rem">🧾</span>
+      <span class="font-bold">Mesero</span>
+    </div>
+    <p class="text-xs text-muted">Puede crear ventas, ver el inventario (solo lectura) y tomar pedidos a domicilio. Sin acceso a configuración ni reportes.</p>
+  </div>
+  <div class="card" style="border-left:4px solid var(--success);padding:1rem">
+    <div class="flex items-center gap-2 mb-1">
+      <span style="font-size:1.3rem">🛵</span>
+      <span class="font-bold">Cliente</span>
+    </div>
+    <p class="text-xs text-muted">Solo accede a la pantalla de pedido a domicilio: elige productos, llena sus datos y confirma el pedido.</p>
+  </div>
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Nombre</th>
+        <th>Usuario</th>
+        <th>Rol</th>
+        <th>Estado</th>
+        <th>Creado</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="tablaUsuarios">
+      <tr><td colspan="6"><div class="spinner"></div></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script data-page-init>
+let listaUsuarios = [];
+
+const INFO_ROLES = {
+  admin:   { label: 'Admin',   badge: 'badge-danger',  icon: '🔑' },
+  mesero:  { label: 'Mesero',  badge: 'badge-purple',  icon: '🧾' },
+  cliente: { label: 'Cliente', badge: 'badge-success',  icon: '🛵' }
+};
+
+(async function() {
+  await cargarUsuarios();
+})();
+
+async function cargarUsuarios() {
+  listaUsuarios = await api.auth.obtenerTodos();
+  renderTablaUsuarios();
+}
+
+function renderTablaUsuarios() {
+  const tbody = document.getElementById('tablaUsuarios');
+
+  if (!listaUsuarios.length) {
+    tbody.innerHTML = `<tr><td colspan="6">
+      <div class="empty-state">
+        <div class="es-icon">👤</div>
+        <h3>Sin usuarios registrados</h3>
+      </div></td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = listaUsuarios.map(u => {
+    const r    = INFO_ROLES[u.rol] || { label: u.rol, badge: 'badge-purple', icon: '👤' };
+    const esYo = window.sesion?.id === u.id;
+    return `
+    <tr>
+      <td class="font-semibold">
+        ${u.nombre}
+        ${esYo ? '<span class="badge badge-info" style="font-size:10px;margin-left:4px">Tú</span>' : ''}
+      </td>
+      <td class="text-muted text-sm">@${u.usuario}</td>
+      <td><span class="badge ${r.badge}">${r.icon} ${r.label}</span></td>
+      <td>
+        <span class="badge ${u.activo ? 'badge-success' : 'badge-danger'}">
+          ${u.activo ? 'Activo' : 'Inactivo'}
+        </span>
+      </td>
+      <td class="text-muted text-sm">${formatDate(u.creado_en)}</td>
+      <td>
+        <div class="flex gap-2">
+          <button class="btn btn-ghost btn-sm" onclick="abrirModalUsuario(${u.id})">Editar</button>
+          ${!esYo
+            ? `<button class="btn btn-ghost btn-sm text-danger" onclick="eliminarUsuario(${u.id})">Eliminar</button>`
+            : ''}
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function abrirModalUsuario(id) {
+  const u      = id ? listaUsuarios.find(x => x.id === id) : null;
+  const esNuevo = !u;
+
+  const html = `
+    <div class="form-row form-row-2">
+      <div class="form-group">
+        <label>Nombre completo *</label>
+        <input id="uNombre" value="${u?.nombre || ''}" placeholder="Ej: Juan Pérez"/>
+      </div>
+      <div class="form-group">
+        <label>Nombre de usuario *</label>
+        <input id="uUsuario" value="${u?.usuario || ''}" placeholder="Ej: juanp" autocomplete="off"/>
+      </div>
+    </div>
+    <div class="form-row form-row-2">
+      <div class="form-group">
+        <label>${esNuevo ? 'Contraseña *' : 'Nueva contraseña'}</label>
+        <input id="uPassword" type="password"
+          placeholder="${esNuevo ? 'Mínimo 4 caracteres' : 'Dejar vacío para no cambiar'}"
+          autocomplete="new-password"/>
+      </div>
+      <div class="form-group">
+        <label>Rol *</label>
+        <select id="uRol">
+          <option value="admin"   ${u?.rol === 'admin'   ? 'selected' : ''}>🔑 Admin — Acceso total</option>
+          <option value="mesero"  ${u?.rol === 'mesero'  ? 'selected' : ''}>🧾 Mesero — Ventas + Inventario</option>
+          <option value="cliente" ${u?.rol === 'cliente' ? 'selected' : ''}>🛵 Cliente — Solo pedidos domicilio</option>
+        </select>
+      </div>
+    </div>
+    ${!esNuevo ? `
+    <div class="form-group">
+      <label>Estado</label>
+      <select id="uActivo">
+        <option value="1" ${u?.activo ? 'selected' : ''}>Activo</option>
+        <option value="0" ${!u?.activo ? 'selected' : ''}>Inactivo (bloqueado)</option>
+      </select>
+    </div>` : ''}
+    <div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.3);
+                padding:10px 14px;border-radius:var(--radius-sm);font-size:12px;
+                color:var(--text-secondary);margin-top:4px;line-height:1.8">
+      <strong style="color:var(--text-primary)">Permisos por rol:</strong><br>
+      🔑 <strong>Admin:</strong> Todo el sistema<br>
+      🧾 <strong>Mesero:</strong> Dashboard · Ventas · Inventario (solo ver) · Pedidos<br>
+      🛵 <strong>Cliente:</strong> Únicamente pantalla de pedido a domicilio
+    </div>`;
+
+  abrirModal(
+    esNuevo ? '+ Nuevo Usuario' : `✏️ Editar: ${u.nombre}`,
+    html,
+    {
+      footer: `
+        <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="guardarUsuario(${id || 'null'})">
+          ${esNuevo ? '✔ Crear Usuario' : '💾 Guardar Cambios'}
+        </button>`
+    }
+  );
+}
+
+async function guardarUsuario(id) {
+  const nombre   = document.getElementById('uNombre')?.value.trim();
+  const usuario  = document.getElementById('uUsuario')?.value.trim().toLowerCase();
+  const password = document.getElementById('uPassword')?.value;
+  const rol      = document.getElementById('uRol')?.value;
+  const activoEl = document.getElementById('uActivo');
+  const activo   = activoEl ? parseInt(activoEl.value) : 1;
+
+  if (!nombre)  { toast('Ingresa el nombre completo', 'warning'); return; }
+  if (!usuario) { toast('Ingresa el nombre de usuario', 'warning'); return; }
+  if (!id && (!password || password.length < 4)) {
+    toast('La contraseña debe tener al menos 4 caracteres', 'warning'); return;
+  }
+  if (password && password.length > 0 && password.length < 4) {
+    toast('La contraseña debe tener al menos 4 caracteres', 'warning'); return;
+  }
+
+  try {
+    if (id) {
+      await api.auth.actualizar({ id, nombre, usuario, password: password || '', rol, activo });
+      toast('✔ Usuario actualizado', 'success');
+    } else {
+      await api.auth.crear({ nombre, usuario, password, rol });
+      toast('✔ Usuario creado', 'success');
+    }
+    cerrarModal();
+    await cargarUsuarios();
+  } catch (e) {
+    toast('Error: ' + (e.message || e), 'error');
+  }
+}
+
+async function eliminarUsuario(id) {
+  const u  = listaUsuarios.find(x => x.id === id);
+  const ok = await confirm(`¿Eliminar al usuario "${u?.nombre}"?\nEsta acción no se puede deshacer.`);
+  if (!ok) return;
+  try {
+    await api.auth.eliminar(id);
+    toast('Usuario eliminado', 'success');
+    await cargarUsuarios();
+  } catch (e) {
+    toast('Error al eliminar: ' + e.message, 'error');
+  }
+}
+</script>

@@ -1,0 +1,381 @@
+<!-- PEDIDO A DOMICILIO -->
+<div class="pedido-layout">
+
+  <!-- ======= CATÁLOGO ======= -->
+  <div class="pedido-catalogo">
+    <div class="ped-header">
+      <div>
+        <h1>🛵 Pedido a Domicilio</h1>
+        <p>Elige tus productos y te los llevamos a casa</p>
+      </div>
+      <div class="ped-carrito-badge" id="pedCarritoBadge" style="display:none">
+        <span>🛒</span>
+        <span id="pedBadgeQty">0</span> productos
+        <span id="pedBadgeTotal" style="font-weight:700;color:var(--primary-light)"></span>
+      </div>
+    </div>
+
+    <div class="ped-search-bar">
+      <div class="search-bar flex-1">
+        <input type="text" id="pedBuscar" placeholder="🔍  Buscar producto..." />
+      </div>
+    </div>
+    <!-- Chips de categorías -->
+    <div class="ped-cats" id="pedCatsWrap">
+      <button class="ped-cat-chip active" data-cat="" onclick="filtrarCategoria(this)">Todos</button>
+    </div>
+
+    <div id="catalogoGrid" class="ped-products-grid">
+      <div class="spinner"></div>
+    </div>
+  </div>
+
+  <!-- ======= PANEL DERECHO: CARRITO + FORMULARIO ======= -->
+  <div class="pedido-carrito">
+
+    <!-- Carrito -->
+    <div class="ped-section-title">🛒 Tu carrito</div>
+    <div id="carritoItems" class="ped-carrito-lista">
+      <div class="ped-carrito-empty">
+        <span style="font-size:2rem">🛍️</span>
+        <p>Agrega productos<br/>para comenzar</p>
+      </div>
+    </div>
+
+    <!-- Totales del carrito -->
+    <div id="ped-totales" class="ped-totales" style="display:none">
+      <div class="ped-total-row"><span>Subtotal</span><span id="ped-subtotal">$0.00</span></div>
+      <div class="ped-total-row ped-total-grand"><span>Total</span><span id="ped-total">$0.00</span></div>
+    </div>
+
+    <div class="ped-divider"></div>
+
+    <!-- Datos de entrega -->
+    <div class="ped-section-title">📍 Datos de entrega</div>
+
+    <div class="form-group" style="margin-bottom:10px">
+      <label style="font-size:12px">Nombre completo *</label>
+      <input id="pedNombre" placeholder="¿Cómo te llamas?" autocomplete="name" style="font-size:14px"/>
+    </div>
+    <div class="form-group" style="margin-bottom:10px">
+      <label style="font-size:12px">Teléfono *</label>
+      <input id="pedTelefono" type="tel" placeholder="0412-000-0000" autocomplete="tel" style="font-size:14px"/>
+    </div>
+    <div class="form-group" style="margin-bottom:10px">
+      <label style="font-size:12px">Dirección *</label>
+      <textarea id="pedDireccion" placeholder="Calle, número, sector, punto de referencia..."
+        rows="2" style="resize:none;font-size:13px"></textarea>
+    </div>
+
+    <div class="ped-divider"></div>
+
+    <!-- Método de pago -->
+    <div class="ped-section-title">💳 Método de pago</div>
+    <div class="pago-metodo-cards">
+      <div class="pago-card active" id="pagoCardEfectivo" onclick="seleccionarPago('efectivo')">
+        <span class="pago-icon">💵</span>
+        <div class="pago-nombre">Efectivo</div>
+        <div class="pago-desc">Pagas al recibir</div>
+      </div>
+      <div class="pago-card" id="pagoCardQr" onclick="seleccionarPago('qr')">
+        <span class="pago-icon">📱</span>
+        <div class="pago-nombre">QR / Pago móvil</div>
+        <div class="pago-desc">Transferencia digital</div>
+      </div>
+    </div>
+
+    <!-- Panel: Efectivo -->
+    <div id="panelEfectivo" class="pago-panel pago-panel-efe">
+      💵 <strong>Pagas en efectivo</strong> al recibir tu pedido.<br/>
+      <span style="font-size:12px;opacity:0.75">Ten el monto exacto listo para el repartidor.</span>
+    </div>
+
+    <!-- Panel: QR -->
+    <div id="panelQR" class="pago-panel pago-panel-qr" style="display:none">
+      <div id="qrImagenWrap" class="qr-img-wrap">
+        <div class="spinner" style="width:28px;height:28px;margin:auto"></div>
+      </div>
+      <div id="qrInfoTexto" class="qr-info-texto"></div>
+      <p style="font-size:11px;text-align:center;margin-top:6px;color:var(--text-muted)">
+        📸 Anota la referencia del pago en las notas
+      </p>
+    </div>
+
+    <div class="form-group" style="margin-bottom:10px">
+      <label style="font-size:12px">Notas adicionales</label>
+      <textarea id="pedNotas" placeholder="Instrucciones especiales, sabor, tamaño, ref de pago..."
+        rows="2" style="resize:none;font-size:13px"></textarea>
+    </div>
+
+    <button class="btn btn-primary ped-btn-confirmar"
+      onclick="confirmarPedido()" id="btnConfirmar" disabled>
+      ✅ Confirmar Pedido
+    </button>
+  </div>
+</div>
+
+<script data-page-init>
+let catalogoProductos = [];
+let catalogoFiltroNombre = '';
+let catalogoFiltroCategoria = '';
+let carrito = []; // [{ producto, cantidad }]
+let metodoPago = 'efectivo';
+
+// ── Inicialización ──────────────────────────────────────────────────────────
+(async function() {
+  const [cats, prods] = await Promise.all([
+    api.inventario.obtenerCategorias(),
+    api.inventario.obtenerProductos({})
+  ]);
+
+  // Chips de categorías
+  const wrap = document.getElementById('pedCatsWrap');
+  cats.forEach(c => {
+    const btn = document.createElement('button');
+    btn.className = 'ped-cat-chip';
+    btn.dataset.cat = c.id;
+    btn.textContent = c.nombre;
+    btn.onclick = function() { filtrarCategoria(this); };
+    wrap.appendChild(btn);
+  });
+
+  catalogoProductos = prods.filter(p => p.activo);
+  renderCatalogo();
+  await cargarPanelQR();
+})();
+
+// ── Filtros ────────────────────────────────────────────────────────────────
+function filtrarCategoria(btn) {
+  document.querySelectorAll('.ped-cat-chip').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  catalogoFiltroCategoria = btn.dataset.cat;
+  renderCatalogo();
+}
+
+document.getElementById('pedBuscar').addEventListener('input', debounce(function() {
+  catalogoFiltroNombre = this.value.toLowerCase();
+  renderCatalogo();
+}, 200));
+
+// ── QR ─────────────────────────────────────────────────────────────────────
+async function cargarPanelQR() {
+  const cfg  = await api.config.obtener();
+  const wrap = document.getElementById('qrImagenWrap');
+  const info = document.getElementById('qrInfoTexto');
+  if (cfg.qr_pago_imagen) {
+    wrap.innerHTML = `<img src="${cfg.qr_pago_imagen}" alt="QR de pago" class="qr-img" />`;
+  } else {
+    wrap.innerHTML = `<div class="qr-placeholder">📷 Sin QR configurado<br/><small>Configura en Ajustes → Métodos de Pago</small></div>`;
+  }
+  if (cfg.qr_pago_info) {
+    info.innerHTML = `<div class="qr-info-box">${cfg.qr_pago_info.replace(/\n/g,'<br/>')}</div>`;
+  }
+}
+
+function seleccionarPago(metodo) {
+  metodoPago = metodo;
+  document.getElementById('pagoCardEfectivo').classList.toggle('active', metodo === 'efectivo');
+  document.getElementById('pagoCardQr').classList.toggle('active', metodo === 'qr');
+  document.getElementById('panelEfectivo').style.display = metodo === 'efectivo' ? '' : 'none';
+  document.getElementById('panelQR').style.display       = metodo === 'qr'       ? '' : 'none';
+}
+
+// ── Catálogo ───────────────────────────────────────────────────────────────
+function renderCatalogo() {
+  const grid = document.getElementById('catalogoGrid');
+  let lista  = catalogoProductos;
+  if (catalogoFiltroCategoria)
+    lista = lista.filter(p => String(p.categoria_id) === String(catalogoFiltroCategoria));
+  if (catalogoFiltroNombre)
+    lista = lista.filter(p => p.nombre.toLowerCase().includes(catalogoFiltroNombre));
+
+  if (!lista.length) {
+    grid.innerHTML = `<div class="ped-empty" style="grid-column:1/-1">
+      <span style="font-size:2.5rem">📦</span>
+      <p>Sin productos${catalogoFiltroNombre ? ' para "' + catalogoFiltroNombre + '"' : ''}</p>
+    </div>`;
+    return;
+  }
+
+  grid.innerHTML = lista.map(p => {
+    const agotado = p.stock <= 0;
+    const enCarrito = carrito.find(i => i.producto.id === p.id);
+    return `
+    <div class="ped-product-card ${agotado ? 'agotado' : ''} ${enCarrito ? 'en-carrito' : ''}" 
+         onclick="${agotado ? '' : 'agregarAlCarrito(' + p.id + ')'}">
+      <div class="ppc-body">
+        <div class="ppc-nombre">${p.nombre}</div>
+        <div class="ppc-cat">${p.categoria_nombre || ''}</div>
+        <div class="ppc-precio">${formatMoney(p.precio_venta)}</div>
+      </div>
+      <div class="ppc-footer">
+        ${agotado
+          ? `<span class="ppc-agotado">❌ Agotado</span>`
+          : enCarrito
+            ? `<div class="ppc-qty-ctrl">
+                 <button onclick="event.stopPropagation();cambiarCantidad(${p.id},-1)">−</button>
+                 <span>${enCarrito.cantidad}</span>
+                 <button onclick="event.stopPropagation();cambiarCantidad(${p.id},+1)">+</button>
+               </div>`
+            : `<button class="ppc-btn-agregar" onclick="event.stopPropagation();agregarAlCarrito(${p.id})">+ Agregar</button>`
+        }
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Carrito ─────────────────────────────────────────────────────────────────
+function agregarAlCarrito(productoId) {
+  const prod = catalogoProductos.find(p => p.id === productoId);
+  if (!prod) return;
+  const item = carrito.find(i => i.producto.id === productoId);
+  if (item) {
+    if (item.cantidad >= prod.stock) { toast('Stock máximo alcanzado', 'warning'); return; }
+    item.cantidad++;
+  } else {
+    carrito.push({ producto: prod, cantidad: 1 });
+  }
+  renderCarrito();
+  renderCatalogo(); // actualiza botón → control de qty
+  animarBadge();
+}
+
+function cambiarCantidad(productoId, delta) {
+  const idx = carrito.findIndex(i => i.producto.id === productoId);
+  if (idx === -1) return;
+  carrito[idx].cantidad += delta;
+  if (carrito[idx].cantidad <= 0) carrito.splice(idx, 1);
+  renderCarrito();
+  renderCatalogo();
+}
+
+function animarBadge() {
+  const badge = document.getElementById('pedCarritoBadge');
+  badge.classList.remove('ped-badge-pulse');
+  void badge.offsetWidth;
+  badge.classList.add('ped-badge-pulse');
+}
+
+function renderCarrito() {
+  const cont   = document.getElementById('carritoItems');
+  const totDiv = document.getElementById('ped-totales');
+  const btn    = document.getElementById('btnConfirmar');
+  const badge  = document.getElementById('pedCarritoBadge');
+
+  if (!carrito.length) {
+    cont.innerHTML    = `<div class="ped-carrito-empty"><span style="font-size:2rem">🛍️</span><p>Agrega productos<br/>para comenzar</p></div>`;
+    totDiv.style.display = 'none';
+    btn.disabled         = true;
+    badge.style.display  = 'none';
+    return;
+  }
+
+  let total = 0;
+  cont.innerHTML = carrito.map(i => {
+    const sub = +(i.producto.precio_venta * i.cantidad).toFixed(2);
+    total    += sub;
+    return `
+    <div class="ped-carrito-item">
+      <div class="pci-info">
+        <div class="pci-nombre">${i.producto.nombre}</div>
+        <div class="pci-precio">${formatMoney(i.producto.precio_venta)} c/u</div>
+      </div>
+      <div class="pci-controles">
+        <button class="pci-btn" onclick="cambiarCantidad(${i.producto.id},-1)">−</button>
+        <span class="pci-qty">${i.cantidad}</span>
+        <button class="pci-btn" onclick="cambiarCantidad(${i.producto.id},+1)">+</button>
+      </div>
+      <div class="pci-subtotal">${formatMoney(sub)}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('ped-subtotal').textContent = formatMoney(total);
+  document.getElementById('ped-total').textContent    = formatMoney(total);
+  totDiv.style.display = '';
+  btn.disabled         = false;
+
+  // Badge superior
+  const qty = carrito.reduce((s,i) => s + i.cantidad, 0);
+  document.getElementById('pedBadgeQty').textContent   = qty;
+  document.getElementById('pedBadgeTotal').textContent = formatMoney(total);
+  badge.style.display = '';
+}
+
+// ── Confirmar pedido ────────────────────────────────────────────────────────
+async function confirmarPedido() {
+  const nombre    = document.getElementById('pedNombre').value.trim();
+  const telefono  = document.getElementById('pedTelefono').value.trim();
+  const direccion = document.getElementById('pedDireccion').value.trim();
+  const notas     = document.getElementById('pedNotas').value.trim();
+
+  if (!nombre)         { toast('Ingresa tu nombre',               'warning'); document.getElementById('pedNombre').focus();    return; }
+  if (!telefono)       { toast('Ingresa tu teléfono',             'warning'); document.getElementById('pedTelefono').focus(); return; }
+  if (!direccion)      { toast('Ingresa la dirección de entrega', 'warning'); document.getElementById('pedDireccion').focus();return; }
+  if (!carrito.length) { toast('Agrega al menos un producto',     'warning'); return; }
+
+  const btn = document.getElementById('btnConfirmar');
+  btn.disabled   = true;
+  btn.innerHTML  = '<span class="login-spinner"></span> Procesando...';
+
+  try {
+    const metodoLabel = metodoPago === 'qr' ? '📱 QR / Pago móvil' : '💵 Efectivo';
+    const infoNota = [
+      '🛵 DOMICILIO',
+      `👤 ${nombre}`,
+      `📞 ${telefono}`,
+      `📍 ${direccion}`,
+      `💳 ${metodoLabel}`,
+      notas ? `📝 ${notas}` : ''
+    ].filter(Boolean).join(' | ');
+
+    const ventaData = {
+      cliente_id:  null,
+      metodo_pago: metodoPago === 'qr' ? 'transferencia' : 'efectivo',
+      descuento:   0,
+      pagado:      0,
+      notas:       infoNota,
+      detalle: carrito.map(i => ({
+        producto_id: i.producto.id,
+        nombre:      i.producto.nombre,
+        cantidad:    i.cantidad,
+        precio:      i.producto.precio_venta,
+        descuento:   0,
+        total:       +(i.producto.precio_venta * i.cantidad).toFixed(2)
+      }))
+    };
+
+    const resultado = await api.ventas.crear(ventaData);
+
+    // Pantalla de confirmación
+    const total = carrito.reduce((s,i) => s + i.producto.precio_venta*i.cantidad, 0);
+    document.getElementById('catalogoGrid').innerHTML = `
+      <div class="ped-confirmacion" style="grid-column:1/-1">
+        <div class="ped-check">✅</div>
+        <h2>¡Pedido confirmado!</h2>
+        <p class="ped-num">${resultado.numero}</p>
+        <p>Te contactaremos pronto al <strong>${telefono}</strong> para coordinar la entrega.</p>
+        <div class="ped-resumen-confirm">
+          <div>👤 ${nombre}</div>
+          <div>📍 ${direccion}</div>
+          <div>💳 ${metodoLabel}</div>
+          <div class="ped-total-confirm">Total: <strong>${formatMoney(total)}</strong></div>
+        </div>
+        <button class="btn btn-primary" style="margin-top:1.5rem" onclick="location.reload ? navegarA('pedido') : null">🛵 Hacer otro pedido</button>
+      </div>`;
+
+    // Limpiar estado
+    carrito = [];
+    renderCarrito();
+    document.getElementById('pedNombre').value    = '';
+    document.getElementById('pedTelefono').value  = '';
+    document.getElementById('pedDireccion').value = '';
+    document.getElementById('pedNotas').value     = '';
+
+  } catch (e) {
+    toast('Error al confirmar el pedido: ' + (e.message || e), 'error');
+  } finally {
+    btn.disabled  = false;
+    btn.innerHTML = '✅ Confirmar Pedido';
+  }
+}
+</script>
