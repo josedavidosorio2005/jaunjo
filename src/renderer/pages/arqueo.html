@@ -1,0 +1,451 @@
+<!-- ARQUEO DE CAJA -->
+<div class="page-header">
+  <div>
+    <h1>💰 Arqueo de Caja</h1>
+    <p>Control de turnos y cierre de caja</p>
+  </div>
+  <div class="flex gap-2" id="arqHeaderBtns"></div>
+</div>
+
+<!-- Panel turno activo -->
+<div id="arqPanelActivo" style="display:none">
+  <div class="card mb-5" style="border:2px solid #22c55e">
+    <div class="flex justify-between items-center mb-4">
+      <div>
+        <div style="font-size:12px;color:#22c55e;font-weight:700;letter-spacing:.05em">● TURNO ABIERTO</div>
+        <div id="arqTurnoInfo" style="font-size:13px;color:var(--text-muted);margin-top:2px"></div>
+      </div>
+      <span id="arqTurnoDuracion" style="font-size:13px;color:var(--text-muted)"></span>
+    </div>
+    <div class="grid grid-4" id="arqLiveMetodos" style="gap:12px;margin-bottom:12px"></div>
+    <div class="grid grid-3" id="arqLiveTotales" style="gap:12px"></div>
+  </div>
+
+  <!-- Tabla de ventas del turno -->
+  <div class="card mb-5">
+    <div class="flex justify-between items-center mb-4">
+      <h3 class="font-bold">Ventas del turno</h3>
+      <span id="arqVentasCnt" class="badge badge-green"></span>
+    </div>
+    <div id="arqVentasTabla"><div class="spinner"></div></div>
+  </div>
+</div>
+
+<!-- Panel sin turno -->
+<div id="arqPanelSinTurno" style="display:none">
+  <div class="empty-state" style="padding:60px 0">
+    <div class="es-icon">💰</div>
+    <h3>No hay turno abierto</h3>
+    <p>Abre un turno para empezar a registrar ventas de esta sesión</p>
+    <button class="btn btn-primary mt-4" onclick="arqAbrirTurnoModal()">+ Abrir turno</button>
+  </div>
+</div>
+
+<!-- Historial -->
+<div class="card mt-5">
+  <div class="flex justify-between items-center mb-4">
+    <h3 class="font-bold">Historial de arqueos</h3>
+    <div class="flex gap-2">
+      <input type="date" id="arqDesde" style="width:140px"/>
+      <input type="date" id="arqHasta" style="width:140px"/>
+      <button class="btn btn-ghost btn-sm" onclick="arqCargarHistorial()">Filtrar</button>
+    </div>
+  </div>
+  <div id="arqHistorialTabla"><div class="spinner"></div></div>
+</div>
+
+<script data-page-init>
+let _arqTurno = null;
+let _arqInterval = null;
+
+(async function init() {
+  const hoy   = new Date().toISOString().split('T')[0];
+  const mes   = new Date();
+  mes.setDate(1);
+  document.getElementById('arqDesde').value = mes.toISOString().split('T')[0];
+  document.getElementById('arqHasta').value = hoy;
+  await arqRefrescar();
+  await arqCargarHistorial();
+  clearInterval(_arqInterval);
+  _arqInterval = setInterval(arqRefrescar, 15000);
+})();
+
+async function arqRefrescar() {
+  try {
+    _arqTurno = await api.arqueo.turnoActivo();
+  } catch(e) {
+    _arqTurno = null;
+  }
+  renderArqEstado();
+}
+
+function renderArqEstado() {
+  const panActivo    = document.getElementById('arqPanelActivo');
+  const panSinTurno  = document.getElementById('arqPanelSinTurno');
+  const headerBtns   = document.getElementById('arqHeaderBtns');
+
+  if (_arqTurno) {
+    panActivo.style.display   = 'block';
+    panSinTurno.style.display = 'none';
+    headerBtns.innerHTML = `
+      <button class="btn btn-ghost" onclick="arqVerDetalle(${_arqTurno.id})">📋 Detalle</button>
+      <button class="btn btn-danger" onclick="arqCerrarTurnoModal()">⏹ Cerrar turno</button>
+    `;
+    renderArqLive(_arqTurno);
+  } else {
+    panActivo.style.display   = 'none';
+    panSinTurno.style.display = 'block';
+    headerBtns.innerHTML = `
+      <button class="btn btn-primary" onclick="arqAbrirTurnoModal()">+ Abrir turno</button>
+    `;
+  }
+}
+
+function renderArqLive(t) {
+  const cfg  = appState.config || {};
+  const sym  = cfg.simbolo_moneda || '$';
+  const fmt  = v => `${sym}${Number(v||0).toFixed(2)}`;
+  const live = t.live || {};
+
+  document.getElementById('arqTurnoInfo').textContent =
+    `Apertura: ${(t.fecha_apertura||'').substring(0,16)} · Cajero: ${t.usuario_nombre}`;
+
+  // Duración
+  const durEl = document.getElementById('arqTurnoDuracion');
+  const diffMs = Date.now() - new Date(t.fecha_apertura).getTime();
+  const hrs = Math.floor(diffMs / 3600000);
+  const mins = Math.floor((diffMs % 3600000) / 60000);
+  durEl.textContent = `${hrs}h ${mins}m activo`;
+
+  document.getElementById('arqLiveMetodos').innerHTML = [
+    { label:'💵 Efectivo',       val: live.efectivo,       color:'#22c55e' },
+    { label:'💳 Tarjeta',        val: live.tarjeta,        color:'#3b82f6' },
+    { label:'📲 Transferencia',  val: live.transferencia,  color:'#a855f7' },
+    { label:'📋 Créditos',       val: live.credito || 0,   color:'#f59e0b' },
+  ].map(m => `
+    <div style="background:var(--bg-elevated);border-radius:10px;padding:14px">
+      <div style="font-size:12px;color:var(--text-muted)">${m.label}</div>
+      <div style="font-size:18px;font-weight:800;color:${m.color};margin-top:4px">${fmt(m.val)}</div>
+    </div>`).join('');
+
+  document.getElementById('arqLiveTotales').innerHTML = `
+    <div style="background:var(--bg-elevated);border-radius:10px;padding:14px">
+      <div style="font-size:12px;color:var(--text-muted)">🧾 Total ventas</div>
+      <div style="font-size:20px;font-weight:800;color:var(--color-primary);margin-top:4px">${fmt(live.total)}</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${live.cantidad || 0} transacciones</div>
+    </div>
+    <div style="background:var(--bg-elevated);border-radius:10px;padding:14px">
+      <div style="font-size:12px;color:var(--text-muted)">💸 Gastos del turno</div>
+      <div style="font-size:20px;font-weight:800;color:#ef4444;margin-top:4px">${fmt(live.gastos)}</div>
+    </div>
+    <div style="background:var(--bg-elevated);border-radius:10px;padding:14px">
+      <div style="font-size:12px;color:var(--text-muted)">🏦 Fondo inicial</div>
+      <div style="font-size:20px;font-weight:800;color:#f59e0b;margin-top:4px">${fmt(t.monto_inicial)}</div>
+    </div>`;
+
+  // Contador de ventas badge
+  const cntEl = document.getElementById('arqVentasCnt');
+  if (cntEl) cntEl.textContent = `${live.cantidad || 0} ventas`;
+
+  // Tabla de ventas en vivo - no la cargamos cada 15s para no colapsar, la cargamos en la apertura
+  arqCargarVentasTurno(t);
+}
+
+async function arqCargarVentasTurno(turno) {
+  const el = document.getElementById('arqVentasTabla');
+  if (!el) return;
+  try {
+    const det = await api.arqueo.obtenerPorId(turno.id);
+    const ventas = det?.ventas || [];
+    const cfg    = appState.config || {};
+    const sym    = cfg.simbolo_moneda || '$';
+    const fmt    = v => `${sym}${Number(v||0).toFixed(2)}`;
+    if (ventas.length === 0) {
+      el.innerHTML = `<div class="empty-state" style="padding:20px 0"><p>Sin ventas aún en este turno</p></div>`;
+      return;
+    }
+    el.innerHTML = `<table>
+      <thead><tr><th>Número</th><th>Hora</th><th>Cliente</th><th>Método</th><th>Total</th><th>Estado</th></tr></thead>
+      <tbody>${ventas.slice(0,50).map(v=>`<tr>
+        <td class="font-semibold">${v.numero}</td>
+        <td class="text-muted text-sm">${(v.fecha||'').substring(11,16)}</td>
+        <td>${v.cliente_nombre||'Público'}</td>
+        <td><span class="badge badge-gray">${v.metodo_pago}</span></td>
+        <td class="font-bold">${fmt(v.total)}</td>
+        <td>${v.estado==='anulada'?'<span class="badge badge-red">anulada</span>':'<span class="badge badge-green">ok</span>'}</td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+  } catch(e) {
+    el.innerHTML = `<p class="text-muted">Error cargando ventas</p>`;
+  }
+}
+
+// ── Abrir turno ──────────────────────────────────────────────────────────────
+function arqAbrirTurnoModal() {
+  abrirModal('Abrir turno de caja', `
+    <div class="form-group">
+      <label>Monto inicial en caja (efectivo)</label>
+      <input type="number" id="arqMontoInicial" value="0" min="0" step="0.01" placeholder="0.00"
+        style="font-size:24px;font-weight:700;text-align:center"/>
+      <p class="text-muted text-sm mt-2">El efectivo con el que arrancas el turno (fondo de caja)</p>
+    </div>
+  `, {
+    footer: `
+      <button class="btn btn-primary" onclick="arqConfirmarAbrirTurno()">✓ Abrir turno</button>
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+    `
+  });
+  setTimeout(() => document.getElementById('arqMontoInicial')?.focus(), 100);
+}
+
+async function arqConfirmarAbrirTurno() {
+  const monto = parseFloat(document.getElementById('arqMontoInicial')?.value || 0);
+  try {
+    await api.arqueo.abrirTurno({
+      usuario_id:    window.sesion?.id,
+      usuario_nombre: window.sesion?.nombre || 'Sin nombre',
+      monto_inicial: monto
+    });
+    cerrarModal();
+    toast('Turno abierto correctamente', 'success');
+    await arqRefrescar();
+    arqCargarHistorial();
+  } catch(e) {
+    toast(e.message, 'error');
+  }
+}
+
+// ── Cerrar turno ─────────────────────────────────────────────────────────────
+function arqCerrarTurnoModal() {
+  if (!_arqTurno) return;
+  const cfg = appState.config || {};
+  const sym = cfg.simbolo_moneda || '$';
+  const fmt = v => `${sym}${Number(v||0).toFixed(2)}`;
+  const live = _arqTurno.live || {};
+  const efEsperado = (_arqTurno.monto_inicial||0) + (live.efectivo||0) - (live.gastos||0);
+
+  abrirModal('Cierre de turno — Arqueo', `
+    <div style="background:var(--bg-elevated);border-radius:10px;padding:14px;margin-bottom:16px">
+      <div class="flex justify-between mb-2">
+        <span class="text-muted">Fondo inicial</span><span class="font-bold">${fmt(_arqTurno.monto_inicial)}</span>
+      </div>
+      <div class="flex justify-between mb-2">
+        <span class="text-muted">Ventas en efectivo</span><span class="font-bold text-success">${fmt(live.efectivo)}</span>
+      </div>
+      <div class="flex justify-between mb-2">
+        <span class="text-muted">Gastos del turno</span><span class="font-bold text-danger">-${fmt(live.gastos)}</span>
+      </div>
+      <div style="border-top:1px solid var(--border);margin:8px 0;padding-top:8px" class="flex justify-between">
+        <span class="font-bold">Efectivo esperado</span><span class="font-bold" style="color:var(--color-primary)">${fmt(efEsperado)}</span>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>💵 Efectivo contado físicamente</label>
+      <input type="number" id="arqMontoContado" value="${efEsperado.toFixed(2)}" min="0" step="0.01"
+        style="font-size:22px;font-weight:700;text-align:center" oninput="arqCalcDif()"/>
+    </div>
+    <div id="arqDifRow" style="display:flex;justify-content:space-between;font-size:15px;font-weight:700;margin-top:8px">
+      <span>Diferencia:</span><span id="arqDifVal" style="color:#22c55e">$0.00</span>
+    </div>
+    <div class="form-group mt-4">
+      <label>Notas (opcional)</label>
+      <textarea id="arqNotasCierre" rows="2" placeholder="Observaciones del turno..."></textarea>
+    </div>
+  `, {
+    footer: `
+      <button class="btn btn-danger" onclick="arqConfirmarCerrarTurno()">⏹ Confirmar cierre</button>
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+    `
+  });
+  setTimeout(() => document.getElementById('arqMontoContado')?.focus(), 100);
+}
+
+function arqCalcDif() {
+  const live = _arqTurno?.live || {};
+  const efEsperado = (_arqTurno?.monto_inicial||0) + (live.efectivo||0) - (live.gastos||0);
+  const contado = parseFloat(document.getElementById('arqMontoContado')?.value || 0);
+  const dif = contado - efEsperado;
+  const cfg = appState.config || {};
+  const sym = cfg.simbolo_moneda || '$';
+  const el  = document.getElementById('arqDifVal');
+  if (el) {
+    el.textContent = `${dif >= 0 ? '+' : ''}${sym}${Math.abs(dif).toFixed(2)}`;
+    el.style.color = dif === 0 ? '#22c55e' : dif > 0 ? '#3b82f6' : '#ef4444';
+  }
+}
+
+async function arqConfirmarCerrarTurno() {
+  const contado = parseFloat(document.getElementById('arqMontoContado')?.value || 0);
+  const notas   = document.getElementById('arqNotasCierre')?.value || '';
+  try {
+    const res = await api.arqueo.cerrarTurno({ monto_contado: contado, notas });
+    cerrarModal();
+    toast('Turno cerrado. Diferencia: ' + (res.diferencia >= 0 ? '+' : '') + res.diferencia.toFixed(2), 'success');
+    arqImprimirResumen(res);
+    await arqRefrescar();
+    arqCargarHistorial();
+  } catch(e) {
+    toast(e.message, 'error');
+  }
+}
+
+// ── Historial ────────────────────────────────────────────────────────────────
+async function arqCargarHistorial() {
+  const el    = document.getElementById('arqHistorialTabla');
+  const desde = document.getElementById('arqDesde')?.value;
+  const hasta = document.getElementById('arqHasta')?.value;
+  if (!el) return;
+  try {
+    const lista = await api.arqueo.historial({ desde, hasta });
+    const cfg   = appState.config || {};
+    const sym   = cfg.simbolo_moneda || '$';
+    const fmt   = v => `${sym}${Number(v||0).toFixed(2)}`;
+    if (lista.length === 0) {
+      el.innerHTML = `<div class="empty-state" style="padding:30px 0"><div class="es-icon">📋</div><h3>Sin arqueos en este período</h3></div>`;
+      return;
+    }
+    el.innerHTML = `<table>
+      <thead><tr>
+        <th>#</th><th>Apertura</th><th>Cierre</th><th>Cajero</th>
+        <th>F. Inicial</th><th>Total ventas</th><th>Gastos</th><th>Contado</th>
+        <th>Diferencia</th><th>Estado</th><th></th>
+      </tr></thead>
+      <tbody>${lista.map(a=>{
+        const dif = a.diferencia||0;
+        const difColor = dif === 0 ? 'var(--text-muted)' : dif > 0 ? '#3b82f6' : '#ef4444';
+        return `<tr>
+          <td class="text-muted">#${a.id}</td>
+          <td class="text-sm">${(a.fecha_apertura||'').substring(0,16)}</td>
+          <td class="text-sm text-muted">${a.fecha_cierre ? a.fecha_cierre.substring(0,16) : '—'}</td>
+          <td>${a.usuario_nombre||'—'}</td>
+          <td>${fmt(a.monto_inicial)}</td>
+          <td class="font-bold">${fmt(a.total_ventas)}</td>
+          <td class="text-danger">${fmt(a.gastos_turno)}</td>
+          <td>${a.monto_contado != null ? fmt(a.monto_contado) : '—'}</td>
+          <td style="font-weight:700;color:${difColor}">${dif !== 0 ? (dif > 0 ? '+' : '') + fmt(dif) : '—'}</td>
+          <td>${a.estado==='abierto'?'<span class="badge badge-green">Abierto</span>':'<span class="badge badge-gray">Cerrado</span>'}</td>
+          <td><button class="btn btn-ghost btn-sm" onclick="arqVerDetalle(${a.id})">Ver</button></td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`;
+  } catch(e) {
+    el.innerHTML = `<p class="text-muted">Error cargando historial</p>`;
+  }
+}
+
+// ── Detalle de arqueo ────────────────────────────────────────────────────────
+async function arqVerDetalle(id) {
+  const arq = await api.arqueo.obtenerPorId(id);
+  if (!arq) return;
+  const cfg  = appState.config || {};
+  const sym  = cfg.simbolo_moneda || '$';
+  const fmt  = v => `${sym}${Number(v||0).toFixed(2)}`;
+  const dif  = arq.diferencia || 0;
+  const difColor = dif === 0 ? '#22c55e' : dif > 0 ? '#3b82f6' : '#ef4444';
+  const efEsperado = (arq.monto_inicial||0) + (arq.ventas_efectivo||0) - (arq.gastos_turno||0);
+
+  abrirModal(`Arqueo #${arq.id} — ${arq.usuario_nombre}`, `
+    <div class="grid grid-2" style="gap:10px;margin-bottom:16px">
+      <div style="background:var(--bg-elevated);border-radius:8px;padding:12px">
+        <div class="text-muted text-sm">Apertura</div>
+        <div class="font-bold">${(arq.fecha_apertura||'').substring(0,16)}</div>
+      </div>
+      <div style="background:var(--bg-elevated);border-radius:8px;padding:12px">
+        <div class="text-muted text-sm">Cierre</div>
+        <div class="font-bold">${arq.fecha_cierre ? arq.fecha_cierre.substring(0,16) : 'Turno abierto'}</div>
+      </div>
+    </div>
+    <div style="background:var(--bg-elevated);border-radius:10px;padding:14px;margin-bottom:16px">
+      <div class="flex justify-between mb-2"><span class="text-muted">Fondo inicial</span><span>${fmt(arq.monto_inicial)}</span></div>
+      <div class="flex justify-between mb-2"><span class="text-muted">💵 Efectivo</span><span class="font-bold" style="color:#22c55e">${fmt(arq.ventas_efectivo)}</span></div>
+      <div class="flex justify-between mb-2"><span class="text-muted">💳 Tarjeta</span><span>${fmt(arq.ventas_tarjeta)}</span></div>
+      <div class="flex justify-between mb-2"><span class="text-muted">📲 Transferencia</span><span>${fmt(arq.ventas_transferencia)}</span></div>
+      <div class="flex justify-between mb-2"><span class="text-muted">💸 Gastos</span><span class="text-danger">-${fmt(arq.gastos_turno)}</span></div>
+      <div style="border-top:1px solid var(--border);margin:8px 0;padding-top:8px" class="flex justify-between">
+        <span class="font-bold">Total ventas</span><span class="font-bold" style="color:var(--color-primary)">${fmt(arq.total_ventas)}</span>
+      </div>
+      ${arq.fecha_cierre ? `
+      <div class="flex justify-between"><span class="text-muted">Efectivo esperado</span><span>${fmt(efEsperado)}</span></div>
+      <div class="flex justify-between"><span class="text-muted">Efectivo contado</span><span>${fmt(arq.monto_contado)}</span></div>
+      <div style="border-top:1px solid var(--border);margin:8px 0;padding-top:8px" class="flex justify-between">
+        <span class="font-bold">Diferencia</span>
+        <span class="font-bold" style="color:${difColor}">${dif !== 0 ? (dif>0?'+':'') : ''}${fmt(dif)}</span>
+      </div>` : ''}
+      ${arq.notas ? `<div class="text-muted text-sm mt-2">${arq.notas}</div>` : ''}
+    </div>
+    ${(arq.ventas||[]).length > 0 ? `
+    <h4 class="font-bold mb-2">Ventas del turno (${arq.ventas.length})</h4>
+    <div style="max-height:200px;overflow-y:auto">
+    <table style="font-size:12px">
+      <thead><tr><th>N°</th><th>Hora</th><th>Total</th><th>Método</th><th>Estado</th></tr></thead>
+      <tbody>${arq.ventas.slice(0,30).map(v=>`<tr>
+        <td>${v.numero}</td>
+        <td class="text-muted">${(v.fecha||'').substring(11,16)}</td>
+        <td>${fmt(v.total)}</td>
+        <td>${v.metodo_pago}</td>
+        <td>${v.estado==='anulada'?'<span class="badge badge-red">anulada</span>':'<span class="badge badge-green">ok</span>'}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>` : ''}
+  `, {
+    footer: `
+      <button class="btn btn-ghost" onclick="arqImprimirResumen(${JSON.stringify(arq).replace(/"/g,'&quot;')})">🖨 Imprimir</button>
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cerrar</button>
+    `
+  });
+}
+
+// ── Imprimir resumen de arqueo ────────────────────────────────────────────────
+function arqImprimirResumen(arq) {
+  const cfg     = appState.config || {};
+  const negocio = cfg.nombre_negocio || 'Mi Negocio';
+  const sym     = cfg.simbolo_moneda || '$';
+  const fmt     = v => `${sym}${Number(v||0).toFixed(2)}`;
+  const efEsperado = (arq.monto_inicial||0) + (arq.ventas_efectivo||0) - (arq.gastos_turno||0);
+  const dif     = typeof arq.diferencia === 'number' ? arq.diferencia : (arq.monto_contado - efEsperado);
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Arqueo de Caja</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Courier New',Courier,monospace;font-size:11px;width:72mm;padding:3mm 4mm;color:#000;background:#fff}
+  .c{text-align:center} .r{text-align:right} .b{font-weight:bold}
+  .sep{border-top:1px dashed #000;margin:4px 0}
+  .sep2{border-top:2px solid #000;margin:4px 0}
+  .row{display:flex;justify-content:space-between;padding:1px 0}
+  @media print{@page{margin:0;size:80mm auto}body{margin:0}}
+</style></head>
+<body>
+  <div class="c b" style="font-size:14px">${negocio}</div>
+  <div class="c">ARQUEO DE CAJA</div>
+  <div class="sep2"></div>
+  <div class="row"><span class="b">Cajero:</span><span>${arq.usuario_nombre||'—'}</span></div>
+  <div class="row"><span class="b">Apertura:</span><span>${(arq.fecha_apertura||'').substring(0,16)}</span></div>
+  ${arq.fecha_cierre ? `<div class="row"><span class="b">Cierre:</span><span>${arq.fecha_cierre.substring(0,16)}</span></div>` : ''}
+  <div class="sep"></div>
+  <div class="row"><span>Fondo inicial</span><span>${fmt(arq.monto_inicial||0)}</span></div>
+  <div class="sep"></div>
+  <div class="b">VENTAS POR MÉTODO</div>
+  <div class="row"><span>Efectivo</span><span>${fmt(arq.ventas_efectivo||0)}</span></div>
+  <div class="row"><span>Tarjeta</span><span>${fmt(arq.ventas_tarjeta||0)}</span></div>
+  <div class="row"><span>Transferencia</span><span>${fmt(arq.ventas_transferencia||0)}</span></div>
+  <div class="sep"></div>
+  <div class="row b"><span>TOTAL VENTAS</span><span>${fmt(arq.total_ventas||0)}</span></div>
+  <div class="row"><span>Gastos turno</span><span>-${fmt(arq.gastos_turno||0)}</span></div>
+  <div class="sep2"></div>
+  <div class="row b"><span>Efectivo esperado</span><span>${fmt(efEsperado)}</span></div>
+  ${arq.monto_contado != null ? `
+  <div class="row"><span>Efectivo contado</span><span>${fmt(arq.monto_contado)}</span></div>
+  <div class="sep"></div>
+  <div class="row b" style="font-size:13px"><span>DIFERENCIA</span>
+    <span style="${dif<0?'color:#c00':''}">${dif>=0?'+':''}${fmt(dif)}</span></div>
+  ` : ''}
+  ${arq.notas ? `<div class="sep"></div><div>${arq.notas}</div>` : ''}
+  <div class="sep"></div>
+  <div class="c" style="font-size:9px;margin-top:6px">ContaFlex</div>
+</body></html>`;
+
+  api.ticket.imprimir(html).catch(e => {
+    if (e.message !== 'Impresión cancelada') toast('Error al imprimir: ' + e.message, 'error');
+  });
+}
+</script>

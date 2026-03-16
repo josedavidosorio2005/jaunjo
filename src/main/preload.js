@@ -67,6 +67,14 @@ contextBridge.exposeInMainWorld('api', {
     resetAdmin:    ()      => ipcRenderer.invoke('usuarios:resetAdmin'),
     diagnostico:   ()      => ipcRenderer.invoke('usuarios:diagnostico'),
   },
+  // Arqueo de caja
+  arqueo: {
+    abrirTurno:  (datos)  => ipcRenderer.invoke('arqueo:abrirTurno',  datos),
+    cerrarTurno: (datos)  => ipcRenderer.invoke('arqueo:cerrarTurno', datos),
+    turnoActivo: ()       => ipcRenderer.invoke('arqueo:turnoActivo'),
+    historial:   (filtros)=> ipcRenderer.invoke('arqueo:historial',   filtros),
+    obtenerPorId:(id)     => ipcRenderer.invoke('arqueo:obtenerPorId',id),
+  },
   // Impresión de tickets
   ticket: {
     imprimir: (html) => ipcRenderer.invoke('ticket:imprimir', html),

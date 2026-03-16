@@ -10,6 +10,7 @@ const comprasIPC   = require('../ipc/compras');
 const reportesIPC  = require('../ipc/reportes');
 const configIPC    = require('../ipc/config');
 const usuariosIPC  = require('../ipc/usuarios');
+const arqueoIPC    = require('../ipc/arqueo');
 
 // Puerto del servidor web (se lee de config tras inicializar la BD)
 let SERVER_PORT = 3535;
@@ -66,6 +67,7 @@ app.whenReady().then(async () => {
     reportesIPC.register(ipcMain, db);
     configIPC.register(ipcMain, db);
     usuariosIPC.register(ipcMain, db);
+    arqueoIPC.register(ipcMain, db);
 
     // Handler para abrir diálogos de archivo
     ipcMain.handle('dialog:openFile', async () => {

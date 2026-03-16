@@ -114,9 +114,12 @@ window.sesion = null;
 
 // Permisos por rol
 const permisos = {
-  admin:   ['dashboard','ventas','inventario','clientes','compras','reportes','configuracion','usuarios','pedido'],
-  mesero:  ['dashboard','ventas','inventario','pedido'],
-  cliente: ['pedido']
+  admin:      ['dashboard','ventas','inventario','clientes','compras','reportes','configuracion','usuarios','pedido','arqueo'],
+  vendedor:   ['dashboard','ventas','inventario','pedido','arqueo'],
+  cajero:     ['dashboard','ventas','inventario','pedido','arqueo'],
+  supervisor: ['dashboard','ventas','inventario','clientes','compras','reportes','pedido','arqueo'],
+  mesero:     ['dashboard','ventas','inventario','pedido','arqueo'],
+  cliente:    ['pedido']
 };
 
 // Mapa de páginas — rutas relativas desde index.html
@@ -129,7 +132,8 @@ const paginas = {
   reportes:     'pages/reportes.html',
   configuracion:'pages/configuracion.html',
   pedido:       'pages/pedido.html',
-  usuarios:     'pages/usuarios.html'
+  usuarios:     'pages/usuarios.html',
+  arqueo:       'pages/arqueo.html'
 };
 
 // ---- Inicialización ----

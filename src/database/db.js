@@ -231,6 +231,25 @@ function createTables() {
       fecha TEXT DEFAULT (datetime('now','localtime')), notas TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS arqueos_caja (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      usuario_id INTEGER REFERENCES usuarios(id),
+      usuario_nombre TEXT,
+      fecha_apertura TEXT DEFAULT (datetime('now','localtime')),
+      fecha_cierre  TEXT,
+      monto_inicial REAL DEFAULT 0,
+      ventas_efectivo REAL DEFAULT 0,
+      ventas_tarjeta  REAL DEFAULT 0,
+      ventas_transferencia REAL DEFAULT 0,
+      ventas_credito  REAL DEFAULT 0,
+      total_ventas    REAL DEFAULT 0,
+      gastos_turno    REAL DEFAULT 0,
+      monto_contado   REAL DEFAULT 0,
+      diferencia      REAL DEFAULT 0,
+      estado TEXT DEFAULT 'abierto',
+      notas TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS usuarios (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       nombre TEXT NOT NULL,
