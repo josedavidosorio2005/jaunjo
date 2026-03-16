@@ -264,6 +264,28 @@ select.input{appearance:none}
 .receipt-row:last-child{border-bottom:none}
 .receipt-total{font-size:16px;font-weight:800;color:var(--primary);margin-top:8px}
 
+/* ─── Admin badge ──────────────────────────────────────────────── */
+.admin-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:rgba(239,68,68,.15);color:var(--red);border-radius:99px;font-size:11px;font-weight:700}
+.mod-badge{background:rgba(245,158,11,.15);color:var(--orange)}
+
+/* ─── Tablas ─────────────────────────────────────────────────────── */
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{padding:8px 10px;text-align:left;color:var(--text3);font-weight:600;border-bottom:1px solid var(--bg3);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+.tbl td{padding:10px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:middle}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:rgba(255,255,255,.02)}
+
+/* ─── Stat-mini cards ────────────────────────────────────────────── */
+.stat-mini{background:var(--bg2);border-radius:var(--radius-sm);padding:14px 16px;display:flex;flex-direction:column;gap:4px}
+.stat-mini .val{font-size:22px;font-weight:800}
+.stat-mini .lbl{font-size:11px;color:var(--text2);font-weight:600}
+.stats-row{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px}
+@media(min-width:480px){.stats-row{grid-template-columns:repeat(4,1fr)}}
+
+/* ─── Form sheet ─────────────────────────────────────────────────── */
+.form-row{margin-bottom:12px}
+.form-row label{display:block;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px}
+
 /* ────────────────────────────────────────────────────────────────── */
 /*  PÁGINA VENTAS                                                     */
 /* ────────────────────────────────────────────────────────────────── */
@@ -436,24 +458,53 @@ select.input{appearance:none}
       </div>
     </div>
 
+    <!-- REPORTES (admin) ──────────────────────────────────────────── -->
+    <div class="page" id="pageReportes">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-shrink:0">
+        <h2 style="font-size:20px;font-weight:800">📊 Reportes</h2>
+        <button class="btn btn-ghost" onclick="cargarReportes()">⟳</button>
+      </div>
+      <div id="reportesBody"><div class="spinner-wrap"><div class="spinner"></div></div></div>
+    </div>
+
+    <!-- INVENTARIO (admin) ────────────────────────────────────────── -->
+    <div class="page" id="pageInventario">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-shrink:0">
+        <h2 style="font-size:20px;font-weight:800">📦 Inventario</h2>
+        <button class="btn btn-primary btn-sm" onclick="abrirFormProducto()">+ Agregar</button>
+      </div>
+      <div class="input-wrap mb2" style="flex-shrink:0;margin-bottom:12px">
+        <span class="input-icon">🔍</span>
+        <input class="input" id="invSearch" type="search" placeholder="Buscar producto..." oninput="filtrarInv()"/>
+      </div>
+      <div style="overflow-x:auto;flex:1">
+        <table class="tbl" id="invTable"><thead><tr><th>Producto</th><th>Precio</th><th>Stock</th><th></th></tr></thead>
+        <tbody id="invBody"><tr><td colspan="4" class="text-muted" style="text-align:center;padding:24px"><div class="spinner" style="margin:0 auto"></div></td></tr></tbody></table>
+      </div>
+    </div>
+
+    <!-- CLIENTES (admin) ──────────────────────────────────────────── -->
+    <div class="page" id="pageClientes">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-shrink:0">
+        <h2 style="font-size:20px;font-weight:800">👥 Clientes</h2>
+        <button class="btn btn-primary btn-sm" onclick="abrirFormCliente()">+ Agregar</button>
+      </div>
+      <div id="clientesList"><div class="spinner-wrap"><div class="spinner"></div></div></div>
+    </div>
+
+    <!-- USUARIOS (admin) ──────────────────────────────────────────── -->
+    <div class="page" id="pageUsuarios">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-shrink:0">
+        <h2 style="font-size:20px;font-weight:800">👤 Usuarios</h2>
+        <button class="btn btn-primary btn-sm" onclick="abrirFormUsuario()">+ Agregar</button>
+      </div>
+      <div id="usuariosList"><div class="spinner-wrap"><div class="spinner"></div></div></div>
+    </div>
+
   </div><!-- /main-area -->
 
-  <!-- Bottom nav -->
-  <div class="bottom-nav" id="bottomNav">
-    <div class="bnav-item active" data-page="POS" onclick="goPage('POS')">
-      <div class="bnav-icon">🏪</div>
-      <span>POS</span>
-      <div class="bnav-badge hidden" id="cartBadge">0</div>
-    </div>
-    <div class="bnav-item" data-page="Ventas" onclick="goPage('Ventas')">
-      <div class="bnav-icon">🧾</div>
-      <span>Ventas</span>
-    </div>
-    <div class="bnav-item" data-page="Profile" onclick="goPage('Profile')">
-      <div class="bnav-icon">👤</div>
-      <span>Perfil</span>
-    </div>
-  </div>
+  <!-- Bottom nav (se genera dinámicamente según el rol) -->
+  <div class="bottom-nav" id="bottomNav"></div>
 
 </div><!-- /app -->
 
@@ -638,11 +689,50 @@ async function mostrarApp() {
   document.getElementById('profAvatar').textContent = USER.nombre[0].toUpperCase();
   document.getElementById('profServer').textContent = location.origin;
 
+  // Nav según rol
+  setupNav();
+
   // WS
   conectarWS();
 
   // Cargar datos
   await Promise.allSettled([cargarCatalogo(), cargarClientes()]);
+}
+
+function setupNav() {
+  const isAdmin = USER.rol === 'admin';
+  const nav = document.getElementById('bottomNav');
+  if (isAdmin) {
+    nav.innerHTML = `
+      <div class="bnav-item active" data-page="POS" onclick="goPage('POS')">
+        <div class="bnav-icon">🏪</div><span>POS</span>
+        <div class="bnav-badge hidden" id="cartBadge">0</div>
+      </div>
+      <div class="bnav-item" data-page="Ventas" onclick="goPage('Ventas')">
+        <div class="bnav-icon">🧾</div><span>Ventas</span>
+      </div>
+      <div class="bnav-item" data-page="Inventario" onclick="goPage('Inventario')">
+        <div class="bnav-icon">📦</div><span>Inventario</span>
+      </div>
+      <div class="bnav-item" data-page="Reportes" onclick="goPage('Reportes')">
+        <div class="bnav-icon">📊</div><span>Reportes</span>
+      </div>
+      <div class="bnav-item" data-page="_mas" onclick="abrirMasMenu()">
+        <div class="bnav-icon">⋯</div><span>Más</span>
+      </div>`;
+  } else {
+    nav.innerHTML = `
+      <div class="bnav-item active" data-page="POS" onclick="goPage('POS')">
+        <div class="bnav-icon">🏪</div><span>POS</span>
+        <div class="bnav-badge hidden" id="cartBadge">0</div>
+      </div>
+      <div class="bnav-item" data-page="Ventas" onclick="goPage('Ventas')">
+        <div class="bnav-icon">🧾</div><span>Ventas</span>
+      </div>
+      <div class="bnav-item" data-page="Profile" onclick="goPage('Profile')">
+        <div class="bnav-icon">👤</div><span>Perfil</span>
+      </div>`;
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -691,7 +781,11 @@ function goPage(name) {
   document.querySelectorAll('.bnav-item').forEach(b => b.classList.remove('active'));
   document.getElementById('page' + name).classList.add('active');
   document.querySelector(`[data-page="${name}"]`)?.classList.add('active');
-  if (name === 'Ventas') cargarVentas();
+  if (name === 'Ventas')     cargarVentas();
+  if (name === 'Inventario') cargarInventario();
+  if (name === 'Reportes')   cargarReportes();
+  if (name === 'Clientes')   cargarClientesAdmin();
+  if (name === 'Usuarios')   cargarUsuarios();
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -1014,6 +1108,332 @@ async function cargarVentas() {
 document.getElementById('overlayCheckout').addEventListener('click', function(e) {
   if (e.target === this) cerrarCheckout();
 });
+
+// ════════════════════════════════════════════════════════════════════
+//  REPORTES (admin)
+// ════════════════════════════════════════════════════════════════════
+let _invAll = [];
+
+async function cargarReportes() {
+  const el = document.getElementById('reportesBody');
+  el.innerHTML = '<div class="spinner-wrap"><div class="spinner"></div></div>';
+  try {
+    const r = await api('/api/reportes/resumen');
+    const moneda = INFO.moneda || '$';
+    const fmt2 = n => `${moneda}${parseFloat(n||0).toFixed(2)}`;
+    el.innerHTML = `
+      <div class="stats-row">
+        <div class="stat-mini"><div class="val text-success">${fmt2(r.hoy.ingresos)}</div><div class="lbl">Ingresos hoy</div></div>
+        <div class="stat-mini"><div class="val">${r.hoy.total_ventas||0}</div><div class="lbl">Ventas hoy</div></div>
+        <div class="stat-mini"><div class="val text-success">${fmt2(r.mes.ingresos)}</div><div class="lbl">Ingresos mes</div></div>
+        <div class="stat-mini"><div class="val text-danger">${fmt2(r.gastos.gastos)}</div><div class="lbl">Gastos mes</div></div>
+      </div>
+      <div class="card-sm" style="margin-bottom:16px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:10px">🔥 Top productos del mes</div>
+        ${r.top_productos.length === 0 ? '<p class="text-muted text-sm">Sin datos</p>' : `
+        <table class="tbl">
+          <thead><tr><th>Producto</th><th>Vendidos</th><th>Total</th></tr></thead>
+          <tbody>${r.top_productos.map(p=>`<tr>
+            <td>${esc(p.nombre)}</td>
+            <td class="bold">${p.vendidos}</td>
+            <td class="text-success">${fmt2(p.total)}</td>
+          </tr>`).join('')}</tbody>
+        </table>`}
+      </div>
+      <button class="btn btn-ghost w100" onclick="verVentasDetalle()">📋 Ver ventas del día →</button>`;
+  } catch(e) {
+    el.innerHTML = `<div class="no-results">⚠ ${esc(e.message)}</div>`;
+  }
+}
+
+async function verVentasDetalle() {
+  const el = document.getElementById('reportesBody');
+  el.innerHTML = '<div class="spinner-wrap"><div class="spinner"></div></div>';
+  try {
+    const hoy = new Date().toISOString().split('T')[0];
+    const ventas = await api(`/api/reportes/ventas?desde=${hoy}&hasta=${hoy}`);
+    const moneda = INFO.moneda || '$';
+    const fmt2 = n => `${moneda}${parseFloat(n||0).toFixed(2)}`;
+    el.innerHTML = `
+      <button class="btn btn-ghost btn-sm" onclick="cargarReportes()" style="margin-bottom:12px">← Volver</button>
+      <div style="overflow-x:auto">
+      <table class="tbl">
+        <thead><tr><th>Factura</th><th>Cliente</th><th>Total</th><th>Estado</th></tr></thead>
+        <tbody>${ventas.length===0 ? '<tr><td colspan="4" class="text-muted" style="text-align:center;padding:20px">Sin ventas hoy</td></tr>' :
+          ventas.map(v=>`<tr>
+            <td class="text-sm" style="color:var(--primary)">${esc(v.numero)}</td>
+            <td>${esc(v.cliente_nombre||'Público')}</td>
+            <td class="bold">${fmt2(v.total)}</td>
+            <td><span class="badge ${v.estado==='completada'?'badge-success':v.estado==='anulada'?'badge-danger':'badge-warn'}">${v.estado}</span></td>
+          </tr>`).join('')}
+        </tbody>
+      </table></div>`;
+  } catch(e) {
+    el.innerHTML = `<div class="no-results">⚠ ${esc(e.message)}</div>`;
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  INVENTARIO (admin)
+// ════════════════════════════════════════════════════════════════════
+
+async function cargarInventario() {
+  const tbody = document.getElementById('invBody');
+  tbody.innerHTML = '<tr><td colspan="4" class="text-muted" style="text-align:center;padding:24px"><div class="spinner" style="margin:0 auto"></div></td></tr>';
+  try {
+    _invAll = await api('/api/inventario');
+    renderInv(_invAll);
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="4" class="text-muted" style="text-align:center">${esc(e.message)}</td></tr>`;
+  }
+}
+
+function filtrarInv() {
+  const q = document.getElementById('invSearch').value.toLowerCase();
+  renderInv(q ? _invAll.filter(p => p.nombre.toLowerCase().includes(q) || (p.codigo||'').toLowerCase().includes(q)) : _invAll);
+}
+
+function renderInv(list) {
+  const tbody = document.getElementById('invBody');
+  const moneda = INFO.moneda || '$';
+  if (!list || list.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-muted" style="text-align:center;padding:24px">Sin productos</td></tr>';
+    return;
+  }
+  tbody.innerHTML = list.map(p => {
+    const low = p.stock <= p.stock_minimo && p.stock > 0;
+    const out = p.stock <= 0;
+    const sc  = out ? 'text-danger' : low ? 'text-warn' : '';
+    return `<tr>
+      <td><div style="font-weight:600;font-size:13px">${esc(p.nombre)}</div>
+          <div style="font-size:11px;color:var(--text3)">${esc(p.codigo||'')}</div></td>
+      <td>${moneda}${parseFloat(p.precio||0).toFixed(2)}</td>
+      <td class="bold ${sc}">${p.stock}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-ghost" style="padding:4px 8px;font-size:12px" onclick="editarProducto(${p.id})">✏</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+let _editProdId = null;
+function abrirFormProducto(id) {
+  _editProdId = id || null;
+  const p = id ? _invAll.find(x => x.id === id) : null;
+  const titulo = p ? 'Editar Producto' : 'Nuevo Producto';
+  abrirSheet(titulo, `
+    <div class="form-row"><label>Nombre *</label><input class="input" id="fpNombre" value="${esc(p?.nombre||'')}"/></div>
+    <div class="form-row"><label>Código / SKU</label><input class="input" id="fpCodigo" value="${esc(p?.codigo||'')}"/></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-row"><label>Precio venta</label><input class="input" id="fpPrecio" type="number" step="0.01" min="0" value="${p?.precio||''}"/></div>
+      <div class="form-row"><label>Costo</label><input class="input" id="fpCosto" type="number" step="0.01" min="0" value="${p?.costo||''}"/></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-row"><label>Stock</label><input class="input" id="fpStock" type="number" min="0" value="${p?.stock||0}"/></div>
+      <div class="form-row"><label>Stock mínimo</label><input class="input" id="fpStockMin" type="number" min="0" value="${p?.stock_minimo||5}"/></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:4px">
+      ${p ? `<button class="btn btn-danger" style="flex:0 0 auto" onclick="eliminarProducto(${p.id})">🗑</button>` : ''}
+      <button class="btn btn-success grow" onclick="guardarProducto()">💾 Guardar</button>
+    </div>`);
+}
+
+function editarProducto(id) { abrirFormProducto(id); }
+
+async function guardarProducto() {
+  const nombre = document.getElementById('fpNombre').value.trim();
+  if (!nombre) { snack('Nombre requerido','err'); return; }
+  const body = {
+    nombre,
+    codigo:      document.getElementById('fpCodigo').value.trim() || null,
+    precio:      parseFloat(document.getElementById('fpPrecio').value) || 0,
+    costo:       parseFloat(document.getElementById('fpCosto').value)  || 0,
+    stock:       parseInt(document.getElementById('fpStock').value)    || 0,
+    stock_minimo:parseInt(document.getElementById('fpStockMin').value) || 5,
+  };
+  try {
+    if (_editProdId) {
+      await api(`/api/inventario/${_editProdId}`, 'PUT', body);
+    } else {
+      await api('/api/inventario', 'POST', body);
+    }
+    cerrarSheet();
+    snack('✅ Producto guardado','ok');
+    cargarInventario();
+  } catch(e) { snack('❌ '+e.message,'err'); }
+}
+
+async function eliminarProducto(id) {
+  if (!confirm('¿Desactivar este producto?')) return;
+  try {
+    await api(`/api/inventario/${id}`, 'DELETE');
+    cerrarSheet();
+    snack('Producto desactivado','ok');
+    cargarInventario();
+  } catch(e) { snack('❌ '+e.message,'err'); }
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  CLIENTES (admin)
+// ════════════════════════════════════════════════════════════════════
+
+async function cargarClientesAdmin() {
+  const el = document.getElementById('clientesList');
+  el.innerHTML = '<div class="spinner-wrap"><div class="spinner"></div></div>';
+  try {
+    const lista = await api('/api/clientes');
+    if (lista.length === 0) { el.innerHTML = '<div class="no-results">Sin clientes</div>'; return; }
+    const moneda = INFO.moneda || '$';
+    el.innerHTML = lista.map(c => `
+      <div class="venta-row" onclick="editarCliente(${c.id},'${esc(c.nombre)}','${esc(c.telefono||'')}')">
+        <div class="venta-info">
+          <div class="venta-title">${esc(c.nombre)}</div>
+          <div class="venta-sub">${esc(c.telefono||'Sin teléfono')}</div>
+        </div>
+        <div class="bold ${c.saldo_deuda>0?'text-danger':'text-muted'}">${c.saldo_deuda>0?moneda+parseFloat(c.saldo_deuda).toFixed(2):'Al día'}</div>
+      </div>`).join('');
+  } catch(e) { el.innerHTML = `<div class="no-results">⚠ ${esc(e.message)}</div>`; }
+}
+
+function abrirFormCliente(id, nombre='', telefono='') {
+  abrirSheet(id ? 'Editar Cliente' : 'Nuevo Cliente', `
+    <div class="form-row"><label>Nombre *</label><input class="input" id="fcNombre" value="${esc(nombre)}"/></div>
+    <div class="form-row"><label>Teléfono</label><input class="input" id="fcTel" type="tel" value="${esc(telefono)}"/></div>
+    <button class="btn btn-success w100" onclick="guardarCliente(${id||'null'})">💾 Guardar</button>`);
+}
+function editarCliente(id,nombre,tel){ abrirFormCliente(id,nombre,tel); }
+
+async function guardarCliente(id) {
+  const nombre = document.getElementById('fcNombre').value.trim();
+  if (!nombre) { snack('Nombre requerido','err'); return; }
+  const body = { nombre, telefono: document.getElementById('fcTel').value.trim()||null };
+  try {
+    if (id) { await api(`/api/clientes`, 'POST', body); } // simplificado: siempre crea
+    else    { await api('/api/clientes', 'POST', body); }
+    cerrarSheet();
+    snack('✅ Cliente guardado','ok');
+    cargarClientesAdmin();
+    cargarClientes(); // refrescar select del POS
+  } catch(e) { snack('❌ '+e.message,'err'); }
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  USUARIOS (admin)
+// ════════════════════════════════════════════════════════════════════
+
+async function cargarUsuarios() {
+  const el = document.getElementById('usuariosList');
+  el.innerHTML = '<div class="spinner-wrap"><div class="spinner"></div></div>';
+  try {
+    const lista = await api('/api/usuarios');
+    el.innerHTML = lista.map(u => {
+      const rolColor = u.rol==='admin'?'badge-danger':u.rol==='vendedor'?'badge-primary':'badge-warn';
+      return `<div class="venta-row">
+        <div class="venta-info">
+          <div class="venta-title">${esc(u.nombre)}</div>
+          <div class="venta-sub">@${esc(u.usuario)}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+          <span class="badge ${rolColor}">${u.rol}</span>
+          ${u.activo?'<span class="badge badge-success">activo</span>':'<span class="badge badge-danger">inactivo</span>'}
+        </div>
+        <button class="btn btn-ghost" style="padding:4px 8px;font-size:12px;margin-left:8px" onclick="abrirFormUsuario(${JSON.stringify(u).replace(/"/g,'&quot;')})">✏</button>
+      </div>`;
+    }).join('') || '<div class="no-results">Sin usuarios</div>';
+  } catch(e) { el.innerHTML = `<div class="no-results">⚠ ${esc(e.message)}</div>`; }
+}
+
+let _editUsrId = null;
+function abrirFormUsuario(u) {
+  _editUsrId = u?.id || null;
+  const roles = ['admin','vendedor','cajero','mesero','supervisor'];
+  abrirSheet(u ? 'Editar Usuario' : 'Nuevo Usuario', `
+    <div class="form-row"><label>Nombre completo *</label><input class="input" id="fuNombre" value="${esc(u?.nombre||'')}"/></div>
+    <div class="form-row"><label>Usuario (login) *</label><input class="input" id="fuUser" value="${esc(u?.usuario||'')}" ${u?'readonly':''}></div>
+    <div class="form-row"><label>${u?'Nueva contraseña (dejar vacío para no cambiar)':'Contraseña *'}</label><input class="input" id="fuPass" type="password"/></div>
+    <div class="form-row"><label>Rol</label>
+      <select class="input" id="fuRol">${roles.map(r=>`<option value="${r}" ${u?.rol===r?'selected':''}>${r}</option>`).join('')}</select>
+    </div>
+    <div class="form-row" style="display:flex;align-items:center;gap:10px">
+      <input type="checkbox" id="fuActivo" ${!u||u.activo?'checked':''} style="width:18px;height:18px">
+      <label for="fuActivo" style="margin:0;cursor:pointer">Activo</label>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:4px">
+      <button class="btn btn-success grow" onclick="guardarUsuario()">💾 Guardar</button>
+    </div>`);
+}
+
+async function guardarUsuario() {
+  const nombre = document.getElementById('fuNombre').value.trim();
+  const usuario = document.getElementById('fuUser').value.trim();
+  const pass   = document.getElementById('fuPass').value;
+  const rol    = document.getElementById('fuRol').value;
+  const activo = document.getElementById('fuActivo').checked ? 1 : 0;
+  if (!nombre || !usuario) { snack('Nombre y usuario requeridos','err'); return; }
+  if (!_editUsrId && !pass) { snack('Contraseña requerida','err'); return; }
+  const body = { nombre, usuario, rol, activo };
+  if (pass) body.password = pass;
+  try {
+    if (_editUsrId) { await api(`/api/usuarios/${_editUsrId}`, 'PUT', body); }
+    else            { await api('/api/usuarios', 'POST', body); }
+    cerrarSheet();
+    snack('✅ Usuario guardado','ok');
+    cargarUsuarios();
+  } catch(e) { snack('❌ '+e.message,'err'); }
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  SHEET / DRAWER genérico
+// ════════════════════════════════════════════════════════════════════
+function abrirSheet(titulo, html) {
+  let ov = document.getElementById('genericSheet');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'genericSheet';
+    ov.className = 'overlay';
+    ov.innerHTML = '<div class="sheet"><div class="sheet-handle"></div><h3 id="sheetTitle"></h3><div id="sheetBody"></div></div>';
+    ov.addEventListener('click', e => { if(e.target===ov) cerrarSheet(); });
+    document.body.appendChild(ov);
+  }
+  document.getElementById('sheetTitle').textContent = titulo;
+  document.getElementById('sheetBody').innerHTML = html;
+  ov.classList.add('open');
+}
+function cerrarSheet() {
+  document.getElementById('genericSheet')?.classList.remove('open');
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Cerrar overlays con tap en fondo
+// ════════════════════════════════════════════════════════════════════
+document.getElementById('overlayCheckout').addEventListener('click', function(e) {
+  if (e.target === this) cerrarCheckout();
+});
+
+// ════════════════════════════════════════════════════════════════════
+//  MENÚ "MÁS" (admin)
+// ════════════════════════════════════════════════════════════════════
+
+function abrirMasMenu() {
+  document.querySelectorAll('.bnav-item').forEach(b => b.classList.remove('active'));
+  document.querySelector('[data-page="_mas"]')?.classList.add('active');
+  abrirSheet('Menú Admin', `
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <button class="btn btn-ghost" style="justify-content:flex-start;gap:12px;font-size:15px" onclick="cerrarSheet();goPage('Clientes')">
+        👥 <span>Clientes</span>
+      </button>
+      <button class="btn btn-ghost" style="justify-content:flex-start;gap:12px;font-size:15px" onclick="cerrarSheet();goPage('Usuarios')">
+        👤 <span>Usuarios del sistema</span>
+      </button>
+      <button class="btn btn-ghost" style="justify-content:flex-start;gap:12px;font-size:15px" onclick="cerrarSheet();goPage('Profile')">
+        ⚙ <span>Mi perfil</span>
+      </button>
+      <hr style="border-color:var(--bg3);margin:4px 0"/>
+      <button class="btn btn-danger" style="justify-content:flex-start;gap:12px;font-size:15px" onclick="logout()">
+        ⏻ <span>Cerrar sesión</span>
+      </button>
+    </div>`);
+}
 
 // ════════════════════════════════════════════════════════════════════
 //  INICIO

@@ -293,12 +293,150 @@ function start(db, port) {
     res.status(201).json({ id: _db.lastInsertRowid() });
   });
 
+  // ── Inventario (admin) ──
+  app.get('/api/inventario', adminOnly, (req, res) => {
+    const { busqueda, categoria_id } = req.query;
+    let sql = `SELECT p.*, c.nombre AS categoria_nombre
+      FROM productos p LEFT JOIN categorias c ON p.categoria_id = c.id WHERE 1=1`;
+    const params = [];
+    if (busqueda) { sql += ' AND (p.nombre LIKE ? OR p.codigo LIKE ?)'; params.push(`%${busqueda}%`, `%${busqueda}%`); }
+    if (categoria_id) { sql += ' AND p.categoria_id = ?'; params.push(categoria_id); }
+    sql += ' ORDER BY p.nombre';
+    res.json(_db.all(sql, ...params));
+  });
+
+  app.post('/api/inventario', adminOnly, (req, res) => {
+    const p = req.body || {};
+    if (!p.nombre) return res.status(400).json({ error: 'Nombre requerido' });
+    _db.run(
+      `INSERT INTO productos (nombre,codigo,descripcion,precio,costo,stock,stock_minimo,categoria_id,activo)
+       VALUES (?,?,?,?,?,?,?,?,1)`,
+      p.nombre, p.codigo || null, p.descripcion || null,
+      parseFloat(p.precio) || 0, parseFloat(p.costo) || 0,
+      parseInt(p.stock) || 0, parseInt(p.stock_minimo) || 5,
+      p.categoria_id || null
+    );
+    res.status(201).json({ id: _db.lastInsertRowid() });
+  });
+
+  app.put('/api/inventario/:id', adminOnly, (req, res) => {
+    const id = parseInt(req.params.id);
+    const p  = req.body || {};
+    _db.run(
+      `UPDATE productos SET nombre=?,codigo=?,precio=?,costo=?,stock=?,stock_minimo=?,categoria_id=?,
+       actualizado_en=datetime('now','localtime') WHERE id=?`,
+      p.nombre, p.codigo || null,
+      parseFloat(p.precio) || 0, parseFloat(p.costo) || 0,
+      parseInt(p.stock) || 0, parseInt(p.stock_minimo) || 5,
+      p.categoria_id || null, id
+    );
+    res.json({ ok: true });
+  });
+
+  app.delete('/api/inventario/:id', adminOnly, (req, res) => {
+    const id = parseInt(req.params.id);
+    _db.run('UPDATE productos SET activo=0 WHERE id=?', id);
+    res.json({ ok: true });
+  });
+
+  // ── Usuarios (solo admin) ──
+  app.get('/api/usuarios', adminOnly, (req, res) => {
+    res.json(_db.all('SELECT id,nombre,usuario,rol,activo FROM usuarios ORDER BY nombre'));
+  });
+
+  app.post('/api/usuarios', adminOnly, (req, res) => {
+    const u = req.body || {};
+    if (!u.usuario || !u.password || !u.nombre) return res.status(400).json({ error: 'Campos requeridos' });
+    const hash = hashPassword(String(u.password));
+    try {
+      _db.run(
+        'INSERT INTO usuarios (nombre,usuario,password_hash,rol,activo) VALUES (?,?,?,?,1)',
+        u.nombre, String(u.usuario).toLowerCase(), hash, u.rol || 'vendedor'
+      );
+      res.status(201).json({ id: _db.lastInsertRowid() });
+    } catch (e) {
+      res.status(400).json({ error: e.message });
+    }
+  });
+
+  app.put('/api/usuarios/:id', adminOnly, (req, res) => {
+    const id = parseInt(req.params.id);
+    const u  = req.body || {};
+    if (u.password) {
+      const hash = hashPassword(String(u.password));
+      _db.run('UPDATE usuarios SET nombre=?,rol=?,activo=?,password_hash=? WHERE id=?',
+        u.nombre, u.rol || 'vendedor', u.activo ?? 1, hash, id);
+    } else {
+      _db.run('UPDATE usuarios SET nombre=?,rol=?,activo=? WHERE id=?',
+        u.nombre, u.rol || 'vendedor', u.activo ?? 1, id);
+    }
+    res.json({ ok: true });
+  });
+
+  app.delete('/api/usuarios/:id', adminOnly, (req, res) => {
+    const id = parseInt(req.params.id);
+    if (id === req.user.id) return res.status(400).json({ error: 'No puedes eliminar tu propia cuenta' });
+    _db.run('UPDATE usuarios SET activo=0 WHERE id=?', id);
+    res.json({ ok: true });
+  });
+
+  // ── Reportes (solo admin) ──
+  app.get('/api/reportes/resumen', adminOnly, (req, res) => {
+    const hoy   = new Date().toISOString().split('T')[0];
+    const mes   = hoy.slice(0, 7);
+    const venHoy = _db.get(
+      `SELECT COUNT(*) AS total_ventas, COALESCE(SUM(total),0) AS ingresos
+       FROM ventas WHERE date(fecha)=date(?) AND estado!='anulada'`, hoy);
+    const venMes = _db.get(
+      `SELECT COUNT(*) AS total_ventas, COALESCE(SUM(total),0) AS ingresos
+       FROM ventas WHERE strftime('%Y-%m',fecha)=? AND estado!='anulada'`, mes);
+    const compMes = _db.get(
+      `SELECT COALESCE(SUM(total),0) AS gastos FROM compras WHERE strftime('%Y-%m',fecha)=?`, mes);
+    const topProd = _db.all(
+      `SELECT p.nombre, SUM(d.cantidad) AS vendidos, SUM(d.total) AS total
+       FROM ventas_detalle d JOIN productos p ON d.producto_id=p.id
+       JOIN ventas v ON d.venta_id=v.id
+       WHERE strftime('%Y-%m',v.fecha)=? AND v.estado!='anulada'
+       GROUP BY p.id ORDER BY vendidos DESC LIMIT 5`, mes);
+    res.json({
+      hoy:      venHoy,
+      mes:      venMes,
+      gastos:   compMes,
+      top_productos: topProd,
+    });
+  });
+
+  app.get('/api/reportes/ventas', adminOnly, (req, res) => {
+    const { desde, hasta } = req.query;
+    const hoy = new Date().toISOString().split('T')[0];
+    const d = desde || hoy;
+    const h = hasta  || hoy;
+    const rows = _db.all(
+      `SELECT v.id,v.numero,v.fecha,v.total,v.estado,v.metodo_pago,
+              c.nombre AS cliente_nombre, u.nombre AS vendedor
+       FROM ventas v
+       LEFT JOIN clientes c ON v.cliente_id=c.id
+       LEFT JOIN usuarios u ON v.usuario_id=u.id
+       WHERE date(v.fecha) BETWEEN date(?) AND date(?)
+       ORDER BY v.id DESC LIMIT 500`, d, h);
+    res.json(rows);
+  });
+
   // ── Config (solo admin) ──
   app.get('/api/config', adminOnly, (req, res) => {
     const rows = _db.all('SELECT clave, valor FROM config');
     const cfg  = {};
     for (const r of rows) cfg[r.clave] = r.valor;
     res.json(cfg);
+  });
+
+  app.put('/api/config', adminOnly, (req, res) => {
+    const cambios = req.body || {};
+    _db.transaction(() => {
+      for (const [k, v] of Object.entries(cambios))
+        _db.run('INSERT OR REPLACE INTO config (clave,valor) VALUES (?,?)', k, String(v));
+    });
+    res.json({ ok: true });
   });
 
   // ── Estado del servidor ──
