@@ -55,17 +55,26 @@ function getLocalIPs() {
   for (const [name, addrs] of Object.entries(ifaces)) {
     for (const a of addrs) {
       if (a.family !== 'IPv4' || a.internal) continue;
-      // Descartar adaptadores virtuales conocidos (VirtualBox, VMware, Hyper-V, etc.)
-      const isVirtual = /virtualbox|vmware|vbox|hyper.?v|vethernet|loopback|tunnel|teredo|isatap|pseudo/i.test(name);
-      // Detectar Wi-Fi real
-      const isWifi = /wi.?fi|wlan|wireless/i.test(name);
-      // Descartar rangos típicos de adaptadores virtuales (192.168.56.x = VirtualBox)
-      const isVboxRange = /^192\.168\.(56|57|58|99)\./.test(a.address);
-      if (isVirtual || isVboxRange) continue;
-      ips.push({ ip: a.address, priority: isWifi ? 0 : 1 });
+
+      const nameLow = name.toLowerCase();
+
+      // Descartar adaptadores virtuales en Windows y Linux
+      const isVirtual = /virtualbox|vmware|vbox|hyper.?v|vethernet|loopback|tunnel|teredo|isatap|pseudo|docker|virbr|vnet|br-|tap|tun|dummy/i.test(name);
+
+      // Rangos de adaptadores virtuales conocidos (VirtualBox 192.168.56-99.x, docker 172.17.x)
+      const isVirtualRange = /^192\.168\.(56|57|58|59|99)\./.test(a.address) ||
+                             /^172\.(1[7-9]|2[0-9]|3[0-1])\./.test(a.address);
+
+      if (isVirtual || isVirtualRange) continue;
+
+      // Detectar tipo de interfaz para ordenar
+      const isWifi     = /wi.?fi|wlan|wlp|wlx|wireless/i.test(name);
+      const isEthernet = /eth|enp|eno|ens|em[0-9]|lan/i.test(name);
+
+      ips.push({ ip: a.address, priority: isWifi ? 0 : isEthernet ? 1 : 2 });
     }
   }
-  // Ordenar: Wi-Fi primero, luego Ethernet
+  // Ordenar: Wi-Fi primero, luego Ethernet, luego el resto
   ips.sort((a, b) => a.priority - b.priority);
   return ips.map(x => x.ip);
 }

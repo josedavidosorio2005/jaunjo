@@ -117,14 +117,35 @@ app.whenReady().then(async () => {
     ipcMain.handle('server:openFirewall', async (_, port) => {
       const { exec } = require('child_process');
       const p = parseInt(port) || 3535;
-      // Elimina regla previa si existe y crea una nueva entrada de firewall
-      const cmd = `netsh advfirewall firewall delete rule name="ContaFlex-${p}" 2>nul & ` +
-        `netsh advfirewall firewall add rule name="ContaFlex-${p}" dir=in action=allow protocol=TCP localport=${p}`;
+      const isWin   = process.platform === 'win32';
+      const isLinux = process.platform === 'linux';
       return new Promise((resolve, reject) => {
-        exec(cmd, { shell: 'cmd.exe' }, (err, stdout, stderr) => {
-          if (err) reject(new Error(stderr || err.message));
-          else resolve({ ok: true });
-        });
+        if (isWin) {
+          const cmd = `netsh advfirewall firewall delete rule name="ContaFlex-${p}" 2>nul & ` +
+            `netsh advfirewall firewall add rule name="ContaFlex-${p}" dir=in action=allow protocol=TCP localport=${p}`;
+          exec(cmd, { shell: 'cmd.exe' }, (err, stdout, stderr) => {
+            if (err) reject(new Error(stderr || err.message));
+            else resolve({ ok: true });
+          });
+        } else if (isLinux) {
+          // Intentar con ufw; si no está disponible, usar iptables
+          exec('which ufw', (ufwErr) => {
+            if (!ufwErr) {
+              exec(`ufw allow ${p}/tcp`, (err, stdout, stderr) => {
+                if (err) reject(new Error(stderr || err.message));
+                else resolve({ ok: true });
+              });
+            } else {
+              exec(`iptables -I INPUT -p tcp --dport ${p} -j ACCEPT`, (err, stdout, stderr) => {
+                if (err) reject(new Error(stderr || err.message));
+                else resolve({ ok: true });
+              });
+            }
+          });
+        } else {
+          // macOS u otro SO — no se requiere acción
+          resolve({ ok: true, skipped: true });
+        }
       });
     });
 
@@ -132,16 +153,34 @@ app.whenReady().then(async () => {
       const { exec } = require('child_process');
       const ssid     = (opts && opts.ssid)     || 'ContaFlex-WiFi';
       const password = (opts && opts.password) || 'contaflex2026';
-      // Configurar y arrancar el hotspot de Windows (ICS, requiere adaptador WiFi)
-      const cmds = [
-        `netsh wlan set hostednetwork mode=allow ssid="${ssid}" key="${password}"`,
-        `netsh wlan start hostednetwork`,
-      ].join(' & ');
+      const isWin   = process.platform === 'win32';
+      const isLinux = process.platform === 'linux';
       return new Promise((resolve, reject) => {
-        exec(cmds, { shell: 'cmd.exe' }, (err, stdout, stderr) => {
-          if (err) reject(new Error((stderr || stdout || err.message).trim()));
-          else     resolve({ ssid, password, ok: true });
-        });
+        if (isWin) {
+          const cmds = [
+            `netsh wlan set hostednetwork mode=allow ssid="${ssid}" key="${password}"`,
+            `netsh wlan start hostednetwork`,
+          ].join(' & ');
+          exec(cmds, { shell: 'cmd.exe' }, (err, stdout, stderr) => {
+            if (err) reject(new Error((stderr || stdout || err.message).trim()));
+            else     resolve({ ssid, password, ok: true });
+          });
+        } else if (isLinux) {
+          // Usar nmcli (NetworkManager) para crear hotspot WiFi en Linux
+          exec('which nmcli', (nmErr) => {
+            if (!nmErr) {
+              const cmd = `nmcli device wifi hotspot ifname wlan0 ssid "${ssid}" password "${password}"`;
+              exec(cmd, (err, stdout, stderr) => {
+                if (err) reject(new Error((stderr || stdout || err.message).trim()));
+                else     resolve({ ssid, password, ok: true });
+              });
+            } else {
+              reject(new Error('nmcli no está disponible. Instala NetworkManager para usar esta función.'));
+            }
+          });
+        } else {
+          reject(new Error('Crear hotspot no está soportado en este sistema operativo.'));
+        }
       });
     });
 

@@ -7,7 +7,9 @@
     "start": "electron .",
     "dev": "electron . --inspect",
     "build": "electron-builder",
-    "launch": "node -e \"const {execFile}=require('child_process'); const p=require('path'); execFile(p.join(__dirname,'node_modules/electron/dist/electron.exe'),['.']);\""
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux",
+    "launch": "node scripts/launch.js"
   },
   "keywords": [
     "contabilidad",
@@ -32,6 +34,11 @@
   "build": {
     "appId": "com.contaflex.app",
     "productName": "ContaFlex",
+    "files": [
+      "src/**",
+      "assets/**",
+      "package.json"
+    ],
     "win": {
       "target": "nsis",
       "icon": "assets/icons/icon.ico"
@@ -41,7 +48,10 @@
       "icon": "assets/icons/icon.icns"
     },
     "linux": {
-      "target": "AppImage"
+      "target": ["AppImage", "deb"],
+      "icon": "assets/icons",
+      "category": "Office",
+      "maintainer": "ContaFlex"
     }
   }
 }
