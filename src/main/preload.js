@@ -67,6 +67,11 @@ contextBridge.exposeInMainWorld('api', {
     resetAdmin:    ()      => ipcRenderer.invoke('usuarios:resetAdmin'),
     diagnostico:   ()      => ipcRenderer.invoke('usuarios:diagnostico'),
   },
+  // Impresión de tickets
+  ticket: {
+    imprimir: (html) => ipcRenderer.invoke('ticket:imprimir', html),
+    preview:  (html) => ipcRenderer.invoke('ticket:preview',  html),
+  },
   // Diálogos y ventana
   dialog: {
     openFile: () => ipcRenderer.invoke('dialog:openFile'),

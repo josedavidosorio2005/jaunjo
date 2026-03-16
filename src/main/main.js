@@ -184,6 +184,39 @@ app.whenReady().then(async () => {
       });
     });
 
+    // ── Imprimir ticket ─────────────────────────────────────────────────────
+    ipcMain.handle('ticket:imprimir', (_, htmlContent) => {
+      return new Promise((resolve, reject) => {
+        const win = new BrowserWindow({
+          width: 420, height: 680, show: false,
+          webPreferences: { nodeIntegration: false, contextIsolation: true }
+        });
+        win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent));
+        win.webContents.once('did-finish-load', () => {
+          win.webContents.print({ silent: false, printBackground: false }, (success, reason) => {
+            win.destroy();
+            if (success) resolve({ ok: true });
+            else reject(new Error(reason || 'Impresión cancelada'));
+          });
+        });
+        win.webContents.once('render-process-gone', () => {
+          reject(new Error('Error al cargar el ticket'));
+        });
+      });
+    });
+
+    // ── Vista previa del ticket (muestra la ventana) ──────────────────────────
+    ipcMain.handle('ticket:preview', (_, htmlContent) => {
+      const win = new BrowserWindow({
+        width: 420, height: 680, show: true,
+        title: 'Vista previa del ticket',
+        parent: mainWindow, modal: false,
+        webPreferences: { nodeIntegration: false, contextIsolation: true }
+      });
+      win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent));
+      return { ok: true };
+    });
+
     // 3. Arrancar el servidor web automáticamente
     try {
       const cfgRow = db.getInstance().get("SELECT valor FROM config WHERE clave='server_port'");

@@ -145,6 +145,7 @@ async function cargarVentas() {
           <td>${badgeEstV(v.estado)}</td>
           <td><div class="flex gap-2">
             <button class="btn btn-ghost btn-sm" onclick="verVenta(${v.id})">Ver</button>
+            <button class="btn btn-ghost btn-sm" title="Imprimir ticket" onclick="imprimirRecibo(${v.id})">🖨</button>
             ${v.estado!=='anulada'?`<button class="btn btn-ghost btn-sm text-danger" onclick="anularVenta(${v.id})">Anular</button>`:''}
           </div></td>
         </tr>`).join('')}
@@ -326,11 +327,13 @@ async function procesarVenta() {
       cliente_id: clienteId ? parseInt(clienteId) : null,
       descuento, metodo_pago: metodo, pagado, detalle: [...carrito]
     });
-    toast(`Venta ${res.numero} registrada correctamente`, 'success');
     limpiarCarrito();
     document.getElementById('carritoRecibido').value = '';
     document.getElementById('ctDescuento').value = '0';
     btnCobrar.disabled = false;
+    // Mostrar modal de ticket tras cobrar
+    const ventaCompleta = await api.ventas.obtenerPorId(res.id);
+    mostrarModalTicket(ventaCompleta);
   } catch (e) {
     toast('Error al procesar venta: ' + e.message, 'error');
     document.querySelector('.pos-carrito .btn-success').disabled = false;
@@ -365,48 +368,147 @@ async function verVenta(id) {
   });
 }
 
-async function imprimirRecibo(id) {
-  const venta   = await api.ventas.obtenerPorId(id);
-  const negocio = appState.config.nombre_negocio || 'Mi Negocio';
-  const sym     = appState.config.simbolo_moneda  || '$';
+// ─── Ticket helpers ──────────────────────────────────────────────────────────
+function buildTicketHTML(venta) {
+  const cfg     = appState.config || {};
+  const negocio = cfg.nombre_negocio  || 'Mi Negocio';
+  const tel     = cfg.telefono        || '';
+  const dir     = cfg.direccion       || '';
+  const sym     = cfg.simbolo_moneda  || '$';
   const fmt     = v => `${sym}${Number(v||0).toFixed(2)}`;
-  const win = window.open('', '_blank', 'width=420,height=700');
-  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
-  <title>Recibo ${venta.numero}</title>
-  <style>
-    body{font-family:monospace;font-size:13px;padding:20px 30px;color:#000;background:#fff}
-    .center{text-align:center} .bold{font-weight:bold} .sep{border-top:1px dashed #000;margin:8px 0}
-    table{width:100%;border-collapse:collapse} td{padding:2px 4px} .r{text-align:right}
-    .total{font-size:16px;font-weight:bold}
-  </style></head><body>
-  <div class="center bold" style="font-size:16px">${negocio}</div>
-  <div class="center">Comprobante de Venta</div>
+  const cambio  = Math.max(0, (venta.pagado || 0) - (venta.total || 0));
+  const metodos = { efectivo:'Efectivo', tarjeta:'Tarjeta', transferencia:'Transferencia', credito:'A crédito' };
+
+  return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Ticket ${venta.numero}</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Courier New',Courier,monospace;font-size:11px;width:72mm;padding:3mm 4mm;color:#000;background:#fff}
+  .c{text-align:center} .r{text-align:right} .b{font-weight:bold}
+  .t14{font-size:14px} .t12{font-size:12px} .t10{font-size:10px}
+  .sep{border-top:1px dashed #000;margin:3px 0}
+  .sep2{border-top:1px solid #000;margin:3px 0}
+  table{width:100%;border-collapse:collapse}
+  td{padding:1px 2px;vertical-align:top}
+  .col-prod{width:55%} .col-qty{width:10%;text-align:right}
+  .col-pu{width:17%;text-align:right} .col-tot{width:18%;text-align:right}
+  .row-total{font-size:13px;font-weight:bold}
+  .row-pend{color:#cc0000}
+  .footer{text-align:center;font-size:10px;margin-top:6px}
+  @media print{@page{margin:0;size:80mm auto}body{margin:0}}
+</style></head>
+<body>
+  <div class="c b t14">${negocio}</div>
+  ${tel ? `<div class="c t10">Tel: ${tel}</div>` : ''}
+  ${dir ? `<div class="c t10">${dir}</div>` : ''}
+  <div class="sep2"></div>
+  <div class="c b">COMPROBANTE DE VENTA</div>
   <div class="sep"></div>
-  <div>N°: <b>${venta.numero}</b></div>
-  <div>Fecha: ${venta.fecha}</div>
-  <div>Cliente: ${venta.cliente_nombre||'Público general'}</div>
-  <div>Método: ${venta.metodo_pago}</div>
+  <table><tbody>
+    <tr><td class="b">N°:</td><td colspan="3">${venta.numero}</td></tr>
+    <tr><td class="b">Fecha:</td><td colspan="3">${(venta.fecha||'').substring(0,16)}</td></tr>
+    <tr><td class="b">Cliente:</td><td colspan="3">${venta.cliente_nombre||'Público general'}</td></tr>
+    <tr><td class="b">Pago:</td><td colspan="3">${metodos[venta.metodo_pago]||venta.metodo_pago}</td></tr>
+  </tbody></table>
   <div class="sep"></div>
   <table>
-    <thead><tr><td><b>Producto</b></td><td class="r"><b>Cant</b></td><td class="r"><b>P.Unit</b></td><td class="r"><b>Total</b></td></tr></thead>
-    <tbody>${venta.detalle.map(d=>`<tr>
-      <td>${d.nombre}</td><td class="r">${d.cantidad}</td>
-      <td class="r">${fmt(d.precio)}</td><td class="r">${fmt(d.total)}</td>
-    </tr>`).join('')}</tbody>
+    <thead><tr>
+      <td class="col-prod b">Producto</td>
+      <td class="col-qty b">Qty</td>
+      <td class="col-pu b">P.U.</td>
+      <td class="col-tot b">Total</td>
+    </tr></thead>
+    <tbody>
+      <tr><td colspan="4"><div class="sep"></div></td></tr>
+      ${venta.detalle.map(d=>`<tr>
+        <td class="col-prod">${d.nombre}</td>
+        <td class="col-qty">${d.cantidad}</td>
+        <td class="col-pu">${fmt(d.precio)}</td>
+        <td class="col-tot">${fmt(d.total)}</td>
+      </tr>`).join('')}
+    </tbody>
   </table>
   <div class="sep"></div>
-  <div style="display:flex;justify-content:space-between"><span>Subtotal:</span><span>${fmt(venta.subtotal)}</span></div>
-  ${venta.impuesto>0?`<div style="display:flex;justify-content:space-between"><span>Impuesto:</span><span>${fmt(venta.impuesto)}</span></div>`:''}
   ${venta.descuento>0?`<div style="display:flex;justify-content:space-between"><span>Descuento:</span><span>-${fmt(venta.descuento)}</span></div>`:''}
+  ${venta.impuesto>0?`<div style="display:flex;justify-content:space-between"><span>Impuesto:</span><span>${fmt(venta.impuesto)}</span></div>`:''}
+  <div class="sep2"></div>
+  <div class="row-total" style="display:flex;justify-content:space-between"><span>TOTAL</span><span>${fmt(venta.total)}</span></div>
+  <div style="display:flex;justify-content:space-between"><span>Pagado:</span><span>${fmt(venta.pagado||venta.total)}</span></div>
+  ${cambio>0?`<div style="display:flex;justify-content:space-between"><span>Cambio:</span><span>${fmt(cambio)}</span></div>`:''}
+  ${(venta.pagado||0)<(venta.total||0)?`<div class="row-pend" style="display:flex;justify-content:space-between"><span>Saldo pendiente:</span><span>${fmt(venta.total-venta.pagado)}</span></div>`:''}
   <div class="sep"></div>
-  <div class="total" style="display:flex;justify-content:space-between"><span>TOTAL</span><span>${fmt(venta.total)}</span></div>
-  <div style="display:flex;justify-content:space-between"><span>Pagado:</span><span>${fmt(venta.pagado)}</span></div>
-  ${venta.pagado<venta.total?`<div style="display:flex;justify-content:space-between;color:#cc0000"><span>Pendiente:</span><span>${fmt(venta.total-venta.pagado)}</span></div>`:''}
-  <div class="sep"></div>
-  <div class="center" style="margin-top:16px;font-size:12px">¡Gracias por su compra!</div>
-  <script>window.onload=()=>{window.print();}<\/script>
-  </body></html>`);
-  win.document.close();
+  <div class="footer">¡Gracias por su compra!</div>
+  <div class="footer" style="margin-top:8px;font-size:8px">ContaFlex</div>
+</body></html>`;
+}
+
+function mostrarModalTicket(venta) {
+  const html = buildTicketHTML(venta);
+  abrirModal(`✅ Venta ${venta.numero} registrada`, `
+    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:14px 16px;margin-bottom:16px">
+      <div style="font-size:15px;font-weight:700;color:#166534">✓ Cobro exitoso</div>
+      <div style="color:#15803d;margin-top:4px">Total: <b>${formatMoney(venta.total)}</b> · ${venta.metodo_pago}</div>
+    </div>
+    <div style="font-size:13px;color:var(--text-muted)">¿Deseas imprimir el ticket?</div>
+  `, {
+    footer: `
+      <button class="btn btn-primary" onclick="_imprimirHtmlTicket()">🖨 Imprimir ticket</button>
+      <button class="btn btn-ghost" onclick="_descargarTicketTxt()">💾 Guardar .txt</button>
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cerrar</button>
+    `
+  });
+  window._ticketHTMLActual   = html;
+  window._ticketVentaActual  = venta;
+}
+
+window._imprimirHtmlTicket = async function() {
+  try {
+    await api.ticket.imprimir(window._ticketHTMLActual);
+  } catch(e) {
+    if (e.message !== 'Impresión cancelada')
+      toast('Error al imprimir: ' + e.message, 'error');
+  }
+};
+
+window._descargarTicketTxt = function() {
+  const v = window._ticketVentaActual;
+  if (!v) return;
+  const cfg = appState.config || {};
+  const sym = cfg.simbolo_moneda || '$';
+  const fmt = x => `${sym}${Number(x||0).toFixed(2)}`;
+  const pad = (s, n) => String(s).substring(0, n).padEnd(n);
+  const lines = [
+    pad(cfg.nombre_negocio||'Mi Negocio', 32).trim(),
+    ''.padEnd(32, '-'),
+    `N°: ${v.numero}`,
+    `Fecha: ${(v.fecha||'').substring(0,16)}`,
+    `Cliente: ${v.cliente_nombre||'Público general'}`,
+    `Pago: ${v.metodo_pago}`,
+    ''.padEnd(32, '-'),
+    ...v.detalle.map(d => `${pad(d.nombre,18)} x${String(d.cantidad).padStart(3)} ${fmt(d.total).padStart(8)}`),
+    ''.padEnd(32, '-'),
+    `${'TOTAL'.padEnd(24)}${fmt(v.total).padStart(8)}`,
+    `${'Pagado'.padEnd(24)}${fmt(v.pagado||v.total).padStart(8)}`,
+    '',
+    '     ¡Gracias por su compra!',
+  ].join('\n');
+  const blob = new Blob([lines], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `ticket-${v.numero}.txt`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+async function imprimirRecibo(id) {
+  try {
+    const venta = await api.ventas.obtenerPorId(id);
+    const html  = buildTicketHTML(venta);
+    await api.ticket.imprimir(html);
+  } catch(e) {
+    if (e.message !== 'Impresión cancelada')
+      toast('Error al imprimir: ' + e.message, 'error');
+  }
 }
 
 async function anularVenta(id) {
