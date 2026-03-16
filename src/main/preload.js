@@ -78,10 +78,11 @@ contextBridge.exposeInMainWorld('api', {
   },
   // Servidor web / multijugador
   servidor: {
-    status:       ()       => ipcRenderer.invoke('server:status'),
-    start:        (port)   => ipcRenderer.invoke('server:start', port),
-    stop:         ()       => ipcRenderer.invoke('server:stop'),
-    generarQR:    (url)    => ipcRenderer.invoke('server:qr', url),
-    abrirNavegador: (url)  => ipcRenderer.invoke('server:openBrowser', url),
+    status:         ()       => ipcRenderer.invoke('server:status'),
+    start:          (port)   => ipcRenderer.invoke('server:start', port),
+    stop:           ()       => ipcRenderer.invoke('server:stop'),
+    generarQR:      (url)    => ipcRenderer.invoke('server:qr', url),
+    abrirNavegador: (url)    => ipcRenderer.invoke('server:openBrowser', url),
+    abrirFirewall:  (port)   => ipcRenderer.invoke('server:openFirewall', port),
   },
 });

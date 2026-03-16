@@ -52,12 +52,22 @@ function verifyToken(token) {
 function getLocalIPs() {
   const ifaces = os.networkInterfaces();
   const ips = [];
-  for (const iface of Object.values(ifaces)) {
-    for (const a of iface) {
-      if (a.family === 'IPv4' && !a.internal) ips.push(a.address);
+  for (const [name, addrs] of Object.entries(ifaces)) {
+    for (const a of addrs) {
+      if (a.family !== 'IPv4' || a.internal) continue;
+      // Descartar adaptadores virtuales conocidos (VirtualBox, VMware, Hyper-V, etc.)
+      const isVirtual = /virtualbox|vmware|vbox|hyper.?v|vethernet|loopback|tunnel|teredo|isatap|pseudo/i.test(name);
+      // Detectar Wi-Fi real
+      const isWifi = /wi.?fi|wlan|wireless/i.test(name);
+      // Descartar rangos típicos de adaptadores virtuales (192.168.56.x = VirtualBox)
+      const isVboxRange = /^192\.168\.(56|57|58|99)\./.test(a.address);
+      if (isVirtual || isVboxRange) continue;
+      ips.push({ ip: a.address, priority: isWifi ? 0 : 1 });
     }
   }
-  return ips;
+  // Ordenar: Wi-Fi primero, luego Ethernet
+  ips.sort((a, b) => a.priority - b.priority);
+  return ips.map(x => x.ip);
 }
 
 function broadcast(type, data) {

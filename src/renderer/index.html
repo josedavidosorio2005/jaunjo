@@ -181,7 +181,7 @@
   " onclick="if(event.target===this)cerrarPanelServidor()">
     <div style="
       background:var(--bg-card,#1e293b);border-radius:20px 20px 0 0;
-      padding:24px;width:100%;max-width:540px;
+      padding:24px;width:100%;max-width:540px;max-height:90vh;overflow-y:auto;
       animation:slideUp .25s ease;
     ">
       <div style="width:36px;height:4px;background:#475569;border-radius:2px;margin:0 auto 20px"></div>
@@ -205,24 +205,58 @@
 
       <!-- URL + QR -->
       <div id="srvQrSection" style="display:none">
-        <!-- QR -->
-        <div style="text-align:center;margin-bottom:20px">
-          <img id="srvQrImg" src="" alt="QR" style="
-            width:200px;height:200px;border-radius:12px;
-            background:var(--bg-elevated,#334155);margin:0 auto;display:block;
-          "/>
-          <p style="font-size:12px;color:var(--text-muted,#94a3b8);margin-top:8px">
-            Escanear con el celular
-          </p>
+
+        <!-- Selector de IP cuando hay varias -->
+        <div id="srvIpSelector" style="display:none;margin-bottom:12px">
+          <div style="font-size:11px;color:var(--text-muted,#94a3b8);margin-bottom:6px;text-align:center">
+            📡 Elige la red a la que está conectado el celular:
+          </div>
+          <div id="srvIpBtns" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center"></div>
         </div>
 
-        <!-- URLs -->
-        <div id="srvUrls" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px"></div>
+        <!-- QR grande con navegación -->
+        <div style="text-align:center;margin-bottom:16px">
+          <div style="position:relative;display:inline-block">
+            <img id="srvQrImg" src="" alt="QR" style="
+              width:220px;height:220px;border-radius:12px;
+              background:var(--bg-elevated,#334155);display:block;
+            "/>
+            <div id="srvQrSpinner" style="
+              position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+              background:var(--bg-elevated,#334155);border-radius:12px;
+            ">
+              <div style="width:32px;height:32px;border:3px solid #334155;border-top-color:#6366f1;border-radius:50%;animation:spin .6s linear infinite"></div>
+            </div>
+          </div>
+          <p style="font-size:12px;color:var(--text-muted,#94a3b8);margin-top:8px">
+            📱 Abre la cámara o un lector QR en el celular
+          </p>
+          <div id="srvQrUrl" style="font-size:12px;font-family:monospace;color:var(--color-primary,#6366f1);margin-top:4px;word-break:break-all"></div>
+        </div>
 
-        <!-- Abrir en navegador -->
-        <button id="btnSrvOpen" onclick="srvAbrirNavegador()" class="btn btn-primary" style="width:100%;justify-content:center;margin-bottom:10px">
-          🔗 Abrir en navegador
-        </button>
+        <!-- Aviso de firewall (solo Windows) -->
+        <div id="srvFirewallTip" style="
+          background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);
+          border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;
+          display:none;
+        ">
+          ⚠️ <b>Si el celular no carga la página:</b> Windows Firewall puede estar bloqueando el puerto.
+          <button onclick="srvAbrirFirewall()" style="
+            background:none;border:none;color:var(--color-primary,#6366f1);
+            font-size:12px;font-weight:700;cursor:pointer;text-decoration:underline;padding:0;margin-left:4px
+          ">Abrir excepción automáticamente →</button>
+        </div>
+
+        <!-- URLs copiables -->
+        <div id="srvUrls" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px"></div>
+
+        <!-- Botones -->
+        <div style="display:flex;gap:8px">
+          <button id="btnSrvOpen" onclick="srvAbrirNavegador()" class="btn btn-primary" style="flex:1;justify-content:center">
+            🔗 Abrir en navegador
+          </button>
+          <button onclick="srvCopiarUrl()" class="btn btn-ghost" style="flex:0 0 auto" title="Copiar URL">📋</button>
+        </div>
       </div>
 
       <div id="srvOffSection" style="display:none;text-align:center;padding:20px 0">
@@ -248,6 +282,7 @@
 
   let _srvState    = null;
   let _srvInterval = null;
+  let _srvQrIdx    = 0;   // índice de la IP seleccionada actualmente
 
   /** Llamado desde app.js tras login exitoso (o al montar el sidebar) */
   window._initServidorFAB = function() {
@@ -283,51 +318,101 @@
     document.getElementById('srvModal').style.display = 'none';
   }
 
+  async function _generarQrParaUrl(url) {
+    const img     = document.getElementById('srvQrImg');
+    const spinner = document.getElementById('srvQrSpinner');
+    const urlLbl  = document.getElementById('srvQrUrl');
+    if (spinner) spinner.style.display = 'flex';
+    if (img)     img.src = '';
+    if (urlLbl)  urlLbl.textContent = url;
+    try {
+      const qrData = await api.servidor.generarQR(url);
+      if (qrData && img) {
+        img.src = qrData;
+        if (spinner) spinner.style.display = 'none';
+      }
+    } catch (e) {
+      console.error('[QR] Error generando QR:', e);
+      if (spinner) spinner.style.display = 'none';
+    }
+  }
+
   async function renderSrvPanel(st) {
     if (!st) {
       try { st = await api.servidor.status(); _srvState = st; } catch { return; }
     }
 
-    const dot    = document.getElementById('srvStatusDot');
-    const txt    = document.getElementById('srvStatusTxt');
-    const cliTxt = document.getElementById('srvCliTxt');
-    const qrSec  = document.getElementById('srvQrSection');
-    const offSec = document.getElementById('srvOffSection');
+    const dot     = document.getElementById('srvStatusDot');
+    const txt     = document.getElementById('srvStatusTxt');
+    const cliTxt  = document.getElementById('srvCliTxt');
+    const qrSec   = document.getElementById('srvQrSection');
+    const offSec  = document.getElementById('srvOffSection');
     const stopBtn = document.getElementById('btnSrvStop');
 
     if (st.running) {
-      dot.style.background    = '#22c55e';
-      txt.textContent         = `✅ Activo — puerto ${st.port}`;
-      cliTxt.textContent      = `${st.clients} cliente${st.clients !== 1 ? 's' : ''} conectado${st.clients !== 1 ? 's' : ''}`;
-      stopBtn.textContent     = '⏹ Detener';
-      qrSec.style.display     = 'block';
-      offSec.style.display    = 'none';
+      dot.style.background = '#22c55e';
+      txt.textContent      = `✅ Activo — puerto ${st.port}`;
+      cliTxt.textContent   = `${st.clients} cliente${st.clients !== 1 ? 's' : ''} conectado${st.clients !== 1 ? 's' : ''}`;
+      stopBtn.textContent  = '⏹ Detener';
+      qrSec.style.display  = 'block';
+      offSec.style.display = 'none';
 
-      // Mostrar URLs
+      const urls = st.urls || [];
+
+      // ── Selector de IPs (si hay más de una) ──────────────────────
+      const ipSel  = document.getElementById('srvIpSelector');
+      const ipBtns = document.getElementById('srvIpBtns');
+      if (urls.length > 1) {
+        ipSel.style.display = 'block';
+        ipBtns.innerHTML = urls.map((u, i) => {
+          const ip  = u.replace('http://','').split(':')[0];
+          const isWifi = /^172\.|^10\.|^192\.168\.((?!56\.|57\.|58\.|99\.)\d+)\./.test(ip) ||
+                         !/^192\.168\.56\./.test(ip) && /^192\.168\./.test(ip);
+          const lbl = isWifi ? `📶 ${ip}` : `🔌 ${ip}`;
+          const active = i === _srvQrIdx ? 'style="background:var(--color-primary,#6366f1);color:#fff"' : '';
+          return `<button class="btn btn-ghost btn-sm" ${active} onclick="srvSeleccionarIp(${i})" style="font-size:12px;font-family:monospace">${lbl}</button>`;
+        }).join('');
+      } else {
+        ipSel.style.display = 'none';
+      }
+
+      // ── URLs copiables ────────────────────────────────────────────
       const urlsEl = document.getElementById('srvUrls');
-      urlsEl.innerHTML = (st.urls || []).map(u => `
+      urlsEl.innerHTML = urls.map(u => `
         <div style="display:flex;align-items:center;gap:8px;background:var(--bg-elevated,#334155);border-radius:8px;padding:10px 14px">
           <span style="font-size:11px;font-family:monospace;flex:1;word-break:break-all;color:var(--text-primary,#f1f5f9)">${u}</span>
-          <button onclick="navigator.clipboard?.writeText('${u}').then(()=>window._toast&&window._toast('¡Copiado!','success'))" 
+          <button onclick="navigator.clipboard?.writeText('${u}').then(()=>window._toast&&window._toast('¡Copiado!','success'))"
             class="btn btn-ghost btn-sm" style="font-size:11px;flex-shrink:0">Copiar</button>
         </div>`).join('');
 
-      // Generar QR con la URL principal
-      if (st.primaryUrl) {
-        try {
-          const qrData = await api.servidor.generarQR(st.primaryUrl);
-          if (qrData) document.getElementById('srvQrImg').src = qrData;
-        } catch {}
+      // ── Aviso firewall ────────────────────────────────────────────
+      document.getElementById('srvFirewallTip').style.display = 'block';
+
+      // ── Generar QR para la IP activa ──────────────────────────────
+      if (urls.length > 0) {
+        if (_srvQrIdx >= urls.length) _srvQrIdx = 0;
+        await _generarQrParaUrl(urls[_srvQrIdx]);
       }
 
     } else {
-      dot.style.background    = '#ef4444';
-      txt.textContent         = '📴 Detenido';
-      cliTxt.textContent      = '';
-      stopBtn.textContent     = '▶ Iniciar';
-      qrSec.style.display     = 'none';
-      offSec.style.display    = 'block';
+      dot.style.background = '#ef4444';
+      txt.textContent      = '📴 Detenido';
+      cliTxt.textContent   = '';
+      stopBtn.textContent  = '▶ Iniciar';
+      qrSec.style.display  = 'none';
+      offSec.style.display = 'block';
     }
+  }
+
+  async function srvSeleccionarIp(idx) {
+    _srvQrIdx = idx;
+    const urls = _srvState?.urls || [];
+    if (urls[idx]) await _generarQrParaUrl(urls[idx]);
+    // Actualizar botones activos
+    document.querySelectorAll('#srvIpBtns .btn').forEach((b, i) => {
+      b.style.background = i === idx ? 'var(--color-primary,#6366f1)' : '';
+      b.style.color      = i === idx ? '#fff' : '';
+    });
   }
 
   async function srvToggle() {
@@ -336,6 +421,7 @@
       if (_srvState?.running) {
         _srvState = await api.servidor.stop();
       } else {
+        _srvQrIdx = 0;
         _srvState = await api.servidor.start();
       }
       renderSrvPanel(_srvState);
@@ -351,12 +437,30 @@
   }
 
   function srvAbrirNavegador() {
-    const url = _srvState?.primaryUrl;
+    const urls = _srvState?.urls || [];
+    const url  = urls[_srvQrIdx] || _srvState?.primaryUrl;
     if (url && window.api?.servidor) api.servidor.abrirNavegador(url);
   }
 
+  function srvCopiarUrl() {
+    const urls = _srvState?.urls || [];
+    const url  = urls[_srvQrIdx] || _srvState?.primaryUrl;
+    if (url) navigator.clipboard?.writeText(url).then(() => {
+      window._toast && window._toast('URL copiada', 'success');
+    });
+  }
+
+  async function srvAbrirFirewall() {
+    try {
+      const port = _srvState?.port || 3535;
+      await api.servidor.abrirFirewall(port);
+      window._toast && window._toast('✅ Regla de firewall creada', 'success');
+    } catch(e) {
+      window._toast && window._toast('No se pudo crear la regla: ' + e.message, 'error');
+    }
+  }
+
   // Inicializar FAB cuando el usuario hace login (hook en app.js)
-  // Si sesion ya existe, iniciar ahora mismo
   document.addEventListener('DOMContentLoaded', () => {
     // Lo activa app.js al hacer login exitoso
   });

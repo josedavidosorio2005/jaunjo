@@ -114,6 +114,20 @@ app.whenReady().then(async () => {
       shell.openExternal(url);
     });
 
+    ipcMain.handle('server:openFirewall', async (_, port) => {
+      const { exec } = require('child_process');
+      const p = parseInt(port) || 3535;
+      // Elimina regla previa si existe y crea una nueva entrada de firewall
+      const cmd = `netsh advfirewall firewall delete rule name="ContaFlex-${p}" 2>nul & ` +
+        `netsh advfirewall firewall add rule name="ContaFlex-${p}" dir=in action=allow protocol=TCP localport=${p}`;
+      return new Promise((resolve, reject) => {
+        exec(cmd, { shell: 'cmd.exe' }, (err, stdout, stderr) => {
+          if (err) reject(new Error(stderr || err.message));
+          else resolve({ ok: true });
+        });
+      });
+    });
+
     // 3. Arrancar el servidor web automáticamente
     try {
       const cfgRow = db.getInstance().get("SELECT valor FROM config WHERE clave='server_port'");
