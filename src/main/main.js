@@ -128,6 +128,23 @@ app.whenReady().then(async () => {
       });
     });
 
+    ipcMain.handle('server:crearHotspot', async (_, opts) => {
+      const { exec } = require('child_process');
+      const ssid     = (opts && opts.ssid)     || 'ContaFlex-WiFi';
+      const password = (opts && opts.password) || 'contaflex2026';
+      // Configurar y arrancar el hotspot de Windows (ICS, requiere adaptador WiFi)
+      const cmds = [
+        `netsh wlan set hostednetwork mode=allow ssid="${ssid}" key="${password}"`,
+        `netsh wlan start hostednetwork`,
+      ].join(' & ');
+      return new Promise((resolve, reject) => {
+        exec(cmds, { shell: 'cmd.exe' }, (err, stdout, stderr) => {
+          if (err) reject(new Error((stderr || stdout || err.message).trim()));
+          else     resolve({ ssid, password, ok: true });
+        });
+      });
+    });
+
     // 3. Arrancar el servidor web automáticamente
     try {
       const cfgRow = db.getInstance().get("SELECT valor FROM config WHERE clave='server_port'");

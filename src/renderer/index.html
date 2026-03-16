@@ -251,12 +251,74 @@
         <div id="srvUrls" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px"></div>
 
         <!-- Botones -->
-        <div style="display:flex;gap:8px">
+        <div style="display:flex;gap:8px;margin-bottom:16px">
           <button id="btnSrvOpen" onclick="srvAbrirNavegador()" class="btn btn-primary" style="flex:1;justify-content:center">
             🔗 Abrir en navegador
           </button>
           <button onclick="srvCopiarUrl()" class="btn btn-ghost" style="flex:0 0 auto" title="Copiar URL">📋</button>
         </div>
+
+        <!-- ── Sección "¿No se conecta?" ── -->
+        <details style="margin-top:4px">
+          <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--text-muted,#94a3b8);
+            padding:10px 14px;background:var(--bg-elevated,#334155);border-radius:8px;
+            list-style:none;display:flex;align-items:center;justify-content:space-between">
+            ❓ ¿El celular no puede conectarse?
+            <span style="font-size:10px">▼</span>
+          </summary>
+          <div style="background:var(--bg-elevated,#334155);border-radius:0 0 8px 8px;padding:14px;margin-top:2px;font-size:13px">
+
+            <!-- Método 1: Hotspot del celular -->
+            <div style="margin-bottom:16px">
+              <div style="font-weight:700;margin-bottom:8px;color:#f1f5f9">
+                ✅ Método recomendado — Hotspot del celular
+              </div>
+              <ol style="margin:0 0 10px 18px;line-height:2;color:var(--text-muted,#94a3b8)">
+                <li>En el celular: activa el <b style="color:#f1f5f9">Punto de Acceso / Hotspot</b></li>
+                <li>En esta PC: conéctate al WiFi del celular</li>
+                <li>Presiona <b style="color:#f1f5f9">⟳ Actualizar</b> en este panel</li>
+                <li>Escanea el nuevo QR con el celular</li>
+              </ol>
+              <div style="font-size:11px;color:var(--text-muted,#94a3b8)">
+                💡 Funciona aunque el WiFi del negocio bloquee la comunicación entre dispositivos.
+              </div>
+            </div>
+
+            <hr style="border:none;border-top:1px solid rgba(255,255,255,.08);margin:12px 0"/>
+
+            <!-- Método 2: Hotspot de Windows -->
+            <div style="margin-bottom:16px">
+              <div style="font-weight:700;margin-bottom:8px;color:#f1f5f9">
+                🖥️ Alternativa — Hotspot de Windows
+              </div>
+              <p style="color:var(--text-muted,#94a3b8);margin-bottom:10px;line-height:1.5">
+                Crea un WiFi desde esta PC y conéctate desde el celular a ese WiFi.
+              </p>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <button onclick="srvCrearHotspot()" class="btn btn-ghost" style="justify-content:flex-start;gap:8px;font-size:13px">
+                  📡 Activar Hotspot de Windows
+                </button>
+                <div id="hotspotInfo" style="display:none;background:rgba(99,102,241,.1);border-radius:6px;padding:10px;font-size:12px"></div>
+              </div>
+            </div>
+
+            <hr style="border:none;border-top:1px solid rgba(255,255,255,.08);margin:12px 0"/>
+
+            <!-- Método 3: Firewall -->
+            <div>
+              <div style="font-weight:700;margin-bottom:8px;color:#f1f5f9">
+                🛡️ Desbloquear Firewall de Windows
+              </div>
+              <p style="color:var(--text-muted,#94a3b8);margin-bottom:10px;line-height:1.5">
+                Permite que el celular acceda al puerto del servidor.
+              </p>
+              <button onclick="srvAbrirFirewall()" class="btn btn-ghost" style="justify-content:flex-start;gap:8px;font-size:13px;width:100%">
+                🔓 Agregar excepción en Firewall
+              </button>
+            </div>
+
+          </div>
+        </details>
       </div>
 
       <div id="srvOffSection" style="display:none;text-align:center;padding:20px 0">
@@ -457,6 +519,24 @@
       window._toast && window._toast('✅ Regla de firewall creada', 'success');
     } catch(e) {
       window._toast && window._toast('No se pudo crear la regla: ' + e.message, 'error');
+    }
+  }
+
+  async function srvCrearHotspot() {
+    const infoEl = document.getElementById('hotspotInfo');
+    infoEl.style.display = 'block';
+    infoEl.textContent = '⏳ Activando hotspot...';
+    try {
+      const result = await api.servidor.crearHotspot();
+      infoEl.innerHTML = `✅ <b>Hotspot activo</b><br>
+        📶 Red: <b>${result.ssid || 'ContaFlex-WiFi'}</b><br>
+        🔑 Clave: <b>${result.password || '12345678'}</b><br>
+        <span style="color:var(--text-muted,#94a3b8)">Conéctate desde el celular y luego presiona ⟳</span>`;
+      // Refrescar el QR con la nueva IP del hotspot
+      setTimeout(() => srvRefresh(), 3000);
+    } catch(e) {
+      infoEl.innerHTML = `⚠️ ${e.message}<br>
+        <span style="color:var(--text-muted,#94a3b8)">Actívalo manualmente: Configuración → Red → Zona WiFi / Punto de acceso</span>`;
     }
   }
 
